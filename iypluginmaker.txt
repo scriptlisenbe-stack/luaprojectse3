@@ -1,0 +1,180 @@
+if game.CoreGui:FindFirstChild("PluginMakerGUI") then
+    notify('Plugin Maker', 'GUI is already open!')
+    return
+end
+
+-- Create Base GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PluginMakerGUI"
+ScreenGui.Parent = game.CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 500, 0, 600)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -300)
+MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+-- Title Bar with Close Button
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 30)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Plugin Maker"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 18
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -30, 0, 0)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.Parent = TitleBar
+
+-- Create Container
+local Container = Instance.new("ScrollingFrame")
+Container.Size = UDim2.new(1, -20, 1, -90)
+Container.Position = UDim2.new(0, 10, 0, 40)
+Container.BackgroundTransparency = 1
+Container.ScrollBarThickness = 6
+Container.ScrollingDirection = Enum.ScrollingDirection.Y
+Container.Parent = MainFrame
+
+-- Function to create RichTextBox input fields
+local function createInputField(name, placeholder, yPos, height, isMultiline)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Position = UDim2.new(0, 0, 0, yPos)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.SourceSansBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = Container
+
+    local textBox
+    if isMultiline then
+        local scrollFrame = Instance.new("ScrollingFrame")
+        scrollFrame.Size = UDim2.new(1, 0, 0, height)
+        scrollFrame.Position = UDim2.new(0, 0, 0, yPos + 25)
+        scrollFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        scrollFrame.BorderSizePixel = 0
+        scrollFrame.ScrollBarThickness = 6
+        scrollFrame.Parent = Container
+
+        textBox = Instance.new("TextBox")
+        textBox.Size = UDim2.new(1, -12, 1, 0)
+        textBox.BackgroundTransparency = 1
+        textBox.Text = ""
+        textBox.PlaceholderText = placeholder
+        textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textBox.PlaceholderColor3 = Color3.fromRGB(178, 178, 178)
+        textBox.TextSize = 14
+        textBox.Font = Enum.Font.SourceSans
+        textBox.TextXAlignment = Enum.TextXAlignment.Left
+        textBox.TextYAlignment = Enum.TextYAlignment.Top
+        textBox.ClearTextOnFocus = false
+        textBox.MultiLine = true
+        textBox.Parent = scrollFrame
+    else
+        textBox = Instance.new("TextBox")
+        textBox.Size = UDim2.new(1, 0, 0, height)
+        textBox.Position = UDim2.new(0, 0, 0, yPos + 25)
+        textBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        textBox.BorderSizePixel = 0
+        textBox.Text = ""
+        textBox.PlaceholderText = placeholder
+        textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textBox.PlaceholderColor3 = Color3.fromRGB(178, 178, 178)
+        textBox.TextSize = 14
+        textBox.Font = Enum.Font.SourceSans
+        textBox.TextXAlignment = Enum.TextXAlignment.Left
+        textBox.Parent = Container
+    end
+
+    return textBox, yPos + height + 35
+end
+
+-- Create input fields
+local yOffset = 0
+local inputs = {}
+inputs.pluginName, yOffset = createInputField("Plugin Name", "Enter plugin name", yOffset, 30)
+inputs.pluginDesc, yOffset = createInputField("Plugin Description", "Enter plugin description", yOffset, 30)
+inputs.cmdName, yOffset = createInputField("Command Name", "Enter command name", yOffset, 30)
+inputs.aliases, yOffset = createInputField("Aliases", "Enter aliases (comma-separated)", yOffset, 30)
+inputs.cmdDesc, yOffset = createInputField("Command Description", "Enter command description", yOffset, 30)
+inputs.funcCode, yOffset = createInputField("Function Code", "Enter function code here...", yOffset, 200, true)
+
+Container.CanvasSize = UDim2.new(0, 0, 0, yOffset + 20)
+
+-- Create Button
+local CreateButton = Instance.new("TextButton")
+CreateButton.Size = UDim2.new(1, -20, 0, 40)
+CreateButton.Position = UDim2.new(0, 10, 1, -50)
+CreateButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+CreateButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CreateButton.TextSize = 16
+CreateButton.Font = Enum.Font.SourceSansBold
+CreateButton.Text = "Create Plugin"
+CreateButton.Parent = MainFrame
+
+-- Button Functionality
+CreateButton.MouseButton1Click:Connect(function()
+    local pluginTemplate = [[
+local Plugin = {
+    ["PluginName"] = "%s",
+    ["PluginDescription"] = "%s",
+    ["Commands"] = {
+        ["%s"] = {
+            ["ListName"] = "%s",
+            ["Description"] = "%s",
+            ["Aliases"] = {%s},
+            ["Function"] = function(args, speaker)
+                %s
+            end,
+        },
+    },
+}
+
+return Plugin]]
+
+    local aliases = ""
+    for alias in string.gmatch(inputs.aliases.Text, "[^,]+") do
+        aliases = aliases .. string.format('"%s",', alias:match("^%s*(.-)%s*$"))
+    end
+
+    local pluginContent = string.format(
+        pluginTemplate,
+        inputs.pluginName.Text,
+        inputs.pluginDesc.Text,
+        inputs.cmdName.Text,
+        inputs.cmdName.Text .. " / " .. inputs.aliases.Text:gsub(",", " /"),
+        inputs.cmdDesc.Text,
+        aliases,
+        inputs.funcCode.Text
+    )
+
+    local fileName = inputs.pluginName.Text .. ".iy"
+    writefile(fileName, pluginContent)
+    notify('Plugin Maker', 'Plugin created: ' .. fileName)
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)

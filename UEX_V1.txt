@@ -1,0 +1,2 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/yyeptech/thebighubs/refs/heads/main/fullyloader"))()
+-- Discord: https://discord.gg/kK8wtk2x8U
