@@ -241,10 +241,23 @@ makeTab("Aimbot", 12 + 4 * (44 + 6))
 makeTab("Rage Bot", 12 + 5 * (44 + 6))
 makeTab("Zuka Bot", 12 + 6 * (44 + 6))
 switchPage("Editor")
+
 -- ========== Zuka Bot Page ========== 
 do
+    -- Services and Local Player
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = Players.LocalPlayer
+
+    -- State variables for the bot
+    local followEnabled = false
+    local currentTarget = nil -- This will store the selected Player object
+
+    -- Create the main page UI
     local ZukaBotPage = createPage("Zuka Bot")
     local page = ZukaBotPage
+    
+    -- Main Title
     local title = Instance.new("TextLabel", page)
     title.Size = UDim2.new(1, -20, 0, 36)
     title.Position = UDim2.new(0, 10, 0, 10)
@@ -252,24 +265,37 @@ do
     title.TextColor3 = Color3.fromRGB(120,200,255)
     title.Font = Enum.Font.Code
     title.TextSize = 22
-    title.Text = "Zukas Follow Bot"
+    title.Text = "Zuka's Follow Bot"
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.TextYAlignment = Enum.TextYAlignment.Center
 
-    local desc = Instance.new("TextLabel", page)
-    desc.Size = UDim2.new(1, -20, 0, 22)
-    desc.Position = UDim2.new(0, 10, 0, 50)
-    desc.BackgroundTransparency = 1
-    desc.TextColor3 = Color3.fromRGB(180,220,255)
-    desc.Font = Enum.Font.Code
-    desc.TextSize = 15
-    desc.Text = "This turns you into a personal follow bot"
-    desc.TextXAlignment = Enum.TextXAlignment.Left
-    desc.TextYAlignment = Enum.TextYAlignment.Center
+    -- Status Label (shows current target)
+    local statusLabel = Instance.new("TextLabel", page)
+    statusLabel.Size = UDim2.new(1, -20, 0, 22)
+    statusLabel.Position = UDim2.new(0, 10, 0, 50)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.fromRGB(180,220,255)
+    statusLabel.Font = Enum.Font.Code
+    statusLabel.TextSize = 15
+    statusLabel.Text = "Target: None"
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-    local followToggle = Instance.new("TextButton", page)
-    followToggle.Size = UDim2.new(0, 160, 0, 32)
-    followToggle.Position = UDim2.new(0, 20, 0, 90)
+    -- Left column for controls
+    local leftColumn = Instance.new("Frame", page)
+    leftColumn.Size = UDim2.new(0.5, -15, 1, -80)
+    leftColumn.Position = UDim2.new(0, 10, 0, 80)
+    leftColumn.BackgroundTransparency = 1
+    local leftLayout = Instance.new("UIListLayout", leftColumn)
+    leftLayout.Padding = UDim.new(0, 8)
+
+    -- Right column for player list
+    local rightColumn = Instance.new("Frame", page)
+    rightColumn.Size = UDim2.new(0.5, -15, 1, -80)
+    rightColumn.Position = UDim2.new(0.5, 5, 0, 80)
+    rightColumn.BackgroundTransparency = 1
+
+    -- Follow Toggle Button
+    local followToggle = Instance.new("TextButton", leftColumn)
+    followToggle.Size = UDim2.new(1, 0, 0, 32)
     followToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
     followToggle.TextColor3 = Color3.fromRGB(255,255,255)
     followToggle.Font = Enum.Font.Code
@@ -277,64 +303,150 @@ do
     followToggle.Text = "Auto Follow: OFF"
     makeUICorner(followToggle, 6)
 
-    -- Teleport button
-    local teleportBtn = Instance.new("TextButton", page)
-    teleportBtn.Size = UDim2.new(0, 160, 0, 32)
-    teleportBtn.Position = UDim2.new(1, -180, 0, 90)
-    teleportBtn.AnchorPoint = Vector2.new(0, 0)
+    -- Teleport Button
+    local teleportBtn = Instance.new("TextButton", leftColumn)
+    teleportBtn.Size = UDim2.new(1, 0, 0, 32)
     teleportBtn.BackgroundColor3 = Color3.fromRGB(60,120,200)
     teleportBtn.TextColor3 = Color3.fromRGB(255,255,255)
     teleportBtn.Font = Enum.Font.Code
     teleportBtn.TextSize = 16
-    teleportBtn.Text = "Teleport to OverZuka"
+    teleportBtn.Text = "Teleport to Target"
     makeUICorner(teleportBtn, 6)
+    
+    -- Player List UI
+    local playerListTitle = Instance.new("TextLabel", rightColumn)
+    playerListTitle.Size = UDim2.new(1, 0, 0, 20)
+    playerListTitle.BackgroundTransparency = 1
+    playerListTitle.Font = Enum.Font.Code
+    playerListTitle.TextColor3 = Color3.fromRGB(220, 220, 230)
+    playerListTitle.Text = "Select a Player:"
+    playerListTitle.TextSize = 14
+    playerListTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    local playerListFrame = Instance.new("ScrollingFrame", rightColumn)
+    playerListFrame.Size = UDim2.new(1, 0, 1, -25)
+    playerListFrame.Position = UDim2.new(0, 0, 0, 25)
+    playerListFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    playerListFrame.BorderSizePixel = 0
+    playerListFrame.ScrollBarThickness = 6
+    makeUICorner(playerListFrame, 6)
+    local playerListLayout = Instance.new("UIListLayout", playerListFrame)
+    playerListLayout.Padding = UDim.new(0, 5)
+    playerListLayout.SortOrder = Enum.SortOrder.Name
+
+    -- Function to update button visuals to show who is selected
+    local function updateSelectionVisuals()
+        for _, button in ipairs(playerListFrame:GetChildren()) do
+            if button:IsA("TextButton") then
+                local isSelected = (currentTarget and button.Name == currentTarget.Name)
+                button.BackgroundColor3 = isSelected and Color3.fromRGB(80, 140, 220) or Color3.fromRGB(50, 50, 65)
+            end
+        end
+    end
+
+    -- Function to populate the player list
+    local function populatePlayerList()
+        playerListFrame.CanvasSize = UDim2.new() -- Reset scroll size
+        -- Clear existing buttons
+        for _, child in ipairs(playerListFrame:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        -- Add a button for each player (except self)
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local playerBtn = Instance.new("TextButton")
+                playerBtn.Name = player.Name
+                playerBtn.Parent = playerListFrame
+                playerBtn.Size = UDim2.new(1, -10, 0, 28)
+                playerBtn.LayoutOrder = player.Name
+                playerBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+                playerBtn.TextColor3 = Color3.fromRGB(255,255,255)
+                playerBtn.Font = Enum.Font.Code
+                playerBtn.TextSize = 14
+                playerBtn.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+                makeUICorner(playerBtn, 4)
+
+                playerBtn.MouseButton1Click:Connect(function()
+                    currentTarget = player
+                    statusLabel.Text = "Target: " .. player.Name
+                    teleportBtn.Text = "Teleport to " .. player.Name
+                    updateSelectionVisuals()
+                    notify("Zuka Bot", "Target set to " .. player.Name, 2)
+                end)
+            end
+        end
+        updateSelectionVisuals()
+    end
+    
+    -- Event Handlers
     teleportBtn.MouseButton1Click:Connect(function()
-        local target = Players:FindFirstChild("OverZuka")
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        if not currentTarget then
+            return notify("Zuka Bot", "No target selected!", 2)
+        end
+        
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") then
             local myChar = LocalPlayer.Character
             if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-                myChar.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -7.5)
-                notify("Zuka Bot", "Teleported to OverZuka!", 2)
+                myChar.HumanoidRootPart.CFrame = currentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 5) -- Adjusted offset
+                notify("Zuka Bot", "Teleported to " .. currentTarget.Name, 2)
             else
                 notify("Zuka Bot", "Your character is not loaded!", 2)
             end
         else
-            notify("Zuka Bot", "OverZuka is not in the game!", 2)
+            notify("Zuka Bot", currentTarget.Name .. " is not available!", 2)
         end
     end)
 
-    local followEnabled = false
     followToggle.MouseButton1Click:Connect(function()
         followEnabled = not followEnabled
         followToggle.Text = "Auto Follow: " .. (followEnabled and "ON" or "OFF")
+        followToggle.BackgroundColor3 = followEnabled and Color3.fromRGB(80, 160, 80) or Color3.fromRGB(40,40,40)
     end)
 
-    local followDist = 7.5 -- Increased to keep a comfortable gap
+    Players.PlayerAdded:Connect(populatePlayerList)
+    Players.PlayerRemoving:Connect(function(player)
+        if player == currentTarget then
+            currentTarget = nil
+            statusLabel.Text = "Target: None"
+            teleportBtn.Text = "Teleport to Target"
+            notify("Zuka Bot", "Target left the game, resetting.", 3)
+        end
+        -- Use a small delay to ensure player is fully removed before UI update
+        task.wait(0.1) 
+        populatePlayerList()
+    end)
+
+    -- Initial population
+    populatePlayerList()
+
+    -- Core follow logic
+    local followDist = 7.5
     RunService.RenderStepped:Connect(function()
-        if followEnabled then
-            local target = Players:FindFirstChild("OverZuka")
+        if followEnabled and currentTarget then
+            -- Check if the target is still valid and has a character
+            if not currentTarget.Parent then
+                currentTarget = nil -- Target left, reset
+                return
+            end
+
+            local target = currentTarget
             if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                 local myChar = LocalPlayer.Character
-                if myChar and myChar:FindFirstChild("HumanoidRootPart") and myChar:FindFirstChild("Humanoid") and myChar.Humanoid.Health > 0 then
+                local humanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                if myChar and myChar:FindFirstChild("HumanoidRootPart") and humanoid and humanoid.Health > 0 then
                     local targetHRP = target.Character.HumanoidRootPart
                     local myHRP = myChar.HumanoidRootPart
-                    local offset = (targetHRP.Position - myHRP.Position)
-                    local dist = offset.Magnitude
-                    if dist < followDist - 1 then
-                        -- Too close, step back
-                        myHRP.CFrame = CFrame.new(myHRP.Position - offset.Unit * 0.5, targetHRP.Position)
-                    elseif dist > followDist + 1 then
-                        -- Too far, move closer
-                        local direction = offset.Unit
-                        local desiredPos = targetHRP.Position - direction * followDist
-                        myHRP.CFrame = CFrame.new(desiredPos, targetHRP.Position)
+                    local direction = (targetHRP.Position - myHRP.Position)
+                    
+                    -- Only move if further than the desired distance
+                    if direction.Magnitude > followDist then
+                         humanoid:MoveTo(targetHRP.Position)
                     end
                 end
             end
         end
     end)
 end
-
 -- ========== Rage Bot Page ========== 
 do
     local RageBotPage = createPage("Rage Bot") -- Patched: Was "Fun", now matches tab
