@@ -1,4 +1,4 @@
-=== Secure Access Code Prompt ===
+--=== Secure Access Code Prompt ===
 local ACCESS_CODES = {
     ["root"] = true, -- Replace with your code
     ["root"] = true,  -- Add more codes for friends
