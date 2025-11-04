@@ -113,113 +113,134 @@ Modules.IDE = { State = { UI = nil } }; function Modules.IDE:Toggle() if self.St
 Modules.ESP = { State = { IsActive = false, Connection = nil, TrackedPlayers = {} } }; function Modules.ESP:Toggle() self.State.IsActive = not self.State.IsActive; if self.State.IsActive then self.State.Connection = RunService.RenderStepped:Connect(function() local currentPlayerSet = {}; for _, player in ipairs(Players:GetPlayers()) do if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then currentPlayerSet[player] = true; if not self.State.TrackedPlayers[player] then local char = player.Character; local head = char.Head; local highlight = Instance.new("Highlight"); highlight.FillColor = Color3.fromRGB(255, 60, 60); highlight.OutlineColor = Color3.fromRGB(255, 255, 255); highlight.FillTransparency = 0.8; highlight.OutlineTransparency = 0.3; highlight.Parent = char; local billboard = Instance.new("BillboardGui"); billboard.Adornee = head; billboard.AlwaysOnTop = true; billboard.Size = UDim2.new(0, 200, 0, 50); billboard.StudsOffset = Vector3.new(0, 2.5, 0); billboard.Parent = head; local nameLabel = Instance.new("TextLabel", billboard); nameLabel.Size = UDim2.new(1, 0, 0.5, 0); nameLabel.Text = player.Name; nameLabel.BackgroundTransparency = 1; nameLabel.Font = Enum.Font.Code; nameLabel.TextSize = 18; nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255); local teamLabel = Instance.new("TextLabel", billboard); teamLabel.Size = UDim2.new(1, 0, 0.5, 0); teamLabel.Position = UDim2.new(0, 0, 0.5, 0); teamLabel.BackgroundTransparency = 1; teamLabel.Font = Enum.Font.Code; teamLabel.TextSize = 14; if player.Team then teamLabel.Text = player.Team.Name; teamLabel.TextColor3 = player.Team.TeamColor.Color else teamLabel.Text = "No Team"; teamLabel.TextColor3 = Color3.fromRGB(200, 200, 200) end; self.State.TrackedPlayers[player] = {Highlight = highlight, Billboard = billboard} end end end; for player, data in pairs(self.State.TrackedPlayers) do if not currentPlayerSet[player] then data.Highlight:Destroy(); data.Billboard:Destroy(); self.State.TrackedPlayers[player] = nil end end end) else if self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end; for _, data in pairs(self.State.TrackedPlayers) do data.Highlight:Destroy(); data.Billboard:Destroy() end; self.State.TrackedPlayers = {} end; DoNotif("ESP " .. (self.State.IsActive and "Enabled" or "Disabled"), 3) end
 Modules.ClickTP = { State = { IsActive = false, Connection = nil } }; function Modules.ClickTP:Toggle() self.State.IsActive = not self.State.IsActive; if self.State.IsActive then local mouse = LocalPlayer:GetMouse(); self.State.Connection = UserInputService.InputBegan:Connect(function(i,gp) if not gp and i.KeyCode == Enum.KeyCode.LeftControl then local hrp = LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart; if hrp then hrp.CFrame = mouse.Hit end end end) else if self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end end; DoNotif("Click TP " .. (self.State.IsActive and "Enabled" or "Disabled"), 3) end
 Modules.GrabTools = { State = { IsActive = false, Connection = nil } }; function Modules.GrabTools:Toggle() self.State.IsActive = not self.State.IsActive; if self.State.IsActive then self.State.Connection = workspace.ChildAdded:Connect(function(c) if c:IsA("Tool") then local bp = LocalPlayer:FindFirstChildOfClass("Backpack"); if bp then c:Clone().Parent = bp; DoNotif("Grabbed " .. c.Name, 2) end end end) else if self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end end; DoNotif("Grab Tools " .. (self.State.IsActive and "Enabled" or "Disabled"), 3) end
+Modules.WallWalk = { State = { IsActive = false, Connection = nil } }; function Modules.WallWalk:Enable() if self.State.IsActive then return end; self.State.IsActive = true; local char = LocalPlayer.Character; if not (char and char:FindFirstChild("HumanoidRootPart")) then DoNotif("Character required for WallWalk.", 3); self.State.IsActive = false; return end; local raycastParams = RaycastParams.new(); raycastParams.FilterType = Enum.RaycastFilterType.Blacklist; raycastParams.FilterDescendantsInstances = {char}; self.State.Connection = RunService.RenderStepped:Connect(function() local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); if not (self.State.IsActive and hrp) then return end; local origin = hrp.Position; local result = workspace:Raycast(origin, Vector3.new(0, -5, 0), raycastParams); if result then workspace.Gravity = -result.Normal * 196.2 end end); DoNotif("WallWalk enabled.", 3) end; function Modules.WallWalk:Disable() if not self.State.IsActive then return end; self.State.IsActive = false; if self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end; workspace.Gravity = Vector3.new(0, -196.2, 0); DoNotif("WallWalk disabled.", 3) end; function Modules.WallWalk:Toggle() if self.State.IsActive then self:Disable() else self:Enable() end end
+
+--==============================================================================
+-- AntiKick Module (NEW)
+--==============================================================================
+Modules.AntiKick = {
+    State = {
+        IsHooked = false,
+        Originals = { kicks = {} }
+    }
+}
+
+function Modules.AntiKick:Enable()
+    if self.State.IsHooked then return end
+
+    -- Check for executor-specific functions required for this to work
+    local getRawMetatable = (debug and debug.getmetatable) or getrawmetatable
+    local setReadOnly = setreadonly or (make_writeable and function(t, ro) if ro then make_readonly(t) else make_writeable(t) end end)
+    if not (getRawMetatable and setReadOnly and newcclosure and hookfunction and getnamecallmethod) then
+        return DoNotif("Your environment does not support the required functions for AntiKick.", 5)
+    end
+
+    local meta = getRawMetatable(game)
+    if not meta then return DoNotif("Could not get game metatable.", 3) end
+    if not LocalPlayer then return DoNotif("LocalPlayer not found.", 3) end
+
+    -- Save original metamethods before hooking
+    self.State.Originals.namecall = meta.__namecall
+    self.State.Originals.index = meta.__index
+    self.State.Originals.newindex = meta.__newindex
+
+    -- Hook player.Kick (and lowercase variant) directly
+    for _, kickFunc in ipairs({ LocalPlayer.Kick, LocalPlayer.kick }) do
+        if type(kickFunc) == "function" then
+            local originalKick
+            originalKick = hookfunction(kickFunc, newcclosure(function(self, ...)
+                if self == LocalPlayer then
+                    DoNotif("Kick blocked (direct hook).", 2)
+                    return -- Silently block the kick
+                end
+                return originalKick(self, ...) -- Call original for other objects
+            end))
+            self.State.Originals.kicks[kickFunc] = originalKick
+        end
+    end
+
+    setReadOnly(meta, false)
+
+    -- Hook the __namecall metamethod to catch remote calls
+    meta.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if self == LocalPlayer and method and method:lower() == "kick" then
+            DoNotif("Kick blocked (__namecall).", 2)
+            return -- Silently block the kick
+        end
+        return self.State.Originals.namecall(self, ...)
+    end)
+
+    -- Hook the __index metamethod to prevent scripts from getting the kick function
+    meta.__index = newcclosure(function(self, key)
+        if self == LocalPlayer then
+            local k = tostring(key):lower()
+            if k:find("kick") or k:find("destroy") then
+                DoNotif("Blocked access to: " .. tostring(key), 2)
+                return function() end -- Return a dummy function
+            end
+        end
+        return self.State.Originals.index(self, key)
+    end)
+    
+    -- Hook the __newindex metamethod to prevent scripts from overwriting kick
+    meta.__newindex = newcclosure(function(self, key, value)
+		if self == LocalPlayer then
+			local k = tostring(key):lower()
+			if k:find("kick") or k:find("destroy") then
+				DoNotif("Blocked overwrite of: " .. tostring(key), 2)
+				return -- Silently block
+			end
+		end
+		return self.State.Originals.newindex(self, key, value)
+	end)
+
+    setReadOnly(meta, true)
+    self.State.IsHooked = true
+    DoNotif("Anti-Kick enabled.", 3)
+end
+
+function Modules.AntiKick:Disable()
+    if not self.State.IsHooked then return end
+
+    local getRawMetatable = (debug and debug.getmetatable) or getrawmetatable
+    local setReadOnly = setreadonly or (make_writeable and function(t, ro) if ro then make_readonly(t) else make_writeable(t) end end)
+    
+    -- Unhook direct kicks if unhookfunction is available
+    if unhookfunction then
+        for func, orig in pairs(self.State.Originals.kicks) do
+            unhookfunction(func)
+        end
+    end
+
+    -- Restore original metamethods
+    local meta = getRawMetatable and getRawMetatable(game)
+    if meta and setReadOnly then
+        setReadOnly(meta, false)
+        meta.__namecall = self.State.Originals.namecall
+        meta.__index = self.State.Originals.index
+        meta.__newindex = self.State.Originals.newindex
+        setReadOnly(meta, true)
+    end
+
+    -- Reset state
+    self.State.IsHooked = false
+    self.State.Originals = { kicks = {} }
+    DoNotif("Anti-Kick disabled.", 3)
+end
+
+function Modules.AntiKick:Toggle()
+    if self.State.IsHooked then
+        self:Disable()
+    else
+        self:Enable()
+    end
+end
 
 --==============================================================================
 -- Godmode Module (Self-Contained)
 --==============================================================================
-Modules.Godmode = { 
-    State = { 
-        IsEnabled = false, 
-        Method = nil, 
-        UI = nil,
-        Connection = nil, -- For HealthLock
-        LastHealth = 100
-    } 
-}
-
-function Modules.Godmode:_CleanupUI()
-    if self.State.UI then
-        self.State.UI:Destroy()
-        self.State.UI = nil
-    end
-end
-
-function Modules.Godmode:Disable()
-    if not self.State.IsEnabled then return end
-    self:_CleanupUI()
-
-    local char = LocalPlayer.Character
-    if self.State.Method == "ForceField" and char then
-        local ff = char:FindFirstChild("ZukaGodmodeFF")
-        if ff then ff:Destroy() end
-    elseif self.State.Method == "HealthLock" and self.State.Connection then
-        self.State.Connection:Disconnect()
-        self.State.Connection = nil
-    end
-    
-    self.State.IsEnabled = false
-    self.State.Method = nil
-    DoNotif("Godmode OFF", 2)
-end
-
-function Modules.Godmode:EnableForceField()
-    self:Disable() -- Always disable previous mode first
-    local char = LocalPlayer.Character
-    if not char then return DoNotif("Character not found.", 3) end
-    
-    local ff = Instance.new("ForceField", char)
-    ff.Name = "ZukaGodmodeFF" -- Give it a unique name to avoid conflicts
-    
-    self.State.IsEnabled = true
-    self.State.Method = "ForceField"
-    DoNotif("Godmode ON (ForceField)", 2)
-end
-
-function Modules.Godmode:EnableHealthLock()
-    self:Disable() -- Always disable previous mode first
-    local char = LocalPlayer.Character
-    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return DoNotif("Humanoid not found.", 3) end
-
-    self.State.LastHealth = humanoid.Health
-    self.State.Connection = humanoid.HealthChanged:Connect(function(newHealth)
-        if newHealth < self.State.LastHealth and newHealth > 0 then
-            -- Took damage, revert it
-            humanoid.Health = self.State.LastHealth
-        else
-            -- Healed or unchanged, update our baseline health
-            self.State.LastHealth = newHealth
-        end
-    end)
-    
-    self.State.IsEnabled = true
-    self.State.Method = "HealthLock"
-    DoNotif("Godmode ON (Health Lock)", 2)
-end
-
-function Modules.Godmode:ShowMenu()
-    self:_CleanupUI()
-
-    local gui = Instance.new("ScreenGui"); gui.Name = "GodmodeUI"; NaProtectUI(gui); self.State.UI = gui
-    local frame = Instance.new("Frame", gui); frame.Size = UDim2.fromOffset(250, 210); frame.Position = UDim2.new(0.5, -125, 0.5, -105); frame.BackgroundColor3 = Color3.fromRGB(35, 35, 45); Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-    local title = Instance.new("TextLabel", frame); title.Size = UDim2.new(1, 0, 0, 30); title.BackgroundTransparency = 1; title.Font = Enum.Font.Code; title.Text = "Godmode Methods"; title.TextColor3 = Color3.fromRGB(200, 220, 255); title.TextSize = 16
-    
-    local buttonContainer = Instance.new("Frame", frame); buttonContainer.Size = UDim2.new(1, -20, 1, -40); buttonContainer.Position = UDim2.fromOffset(10, 35); buttonContainer.BackgroundTransparency = 1
-    local list = Instance.new("UIListLayout", buttonContainer); list.Padding = UDim.new(0, 5); list.SortOrder = Enum.SortOrder.LayoutOrder
-    
-    local function makeButton(text, callback)
-        local btn = Instance.new("TextButton", buttonContainer); btn.Size = UDim2.new(1, 0, 0, 35); btn.BackgroundColor3 = Color3.fromRGB(50, 50, 65); btn.TextColor3 = Color3.fromRGB(220, 220, 230); btn.Font = Enum.Font.Code; btn.Text = text; btn.TextSize = 14; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
-        btn.MouseButton1Click:Connect(callback)
-        return btn
-    end
-    
-    makeButton("Enable: ForceField (Visual)", function() self:_CleanupUI(); self:EnableForceField() end)
-    makeButton("Enable: Health Lock (Silent)", function() self:_CleanupUI(); self:EnableHealthLock() end)
-    if self.State.IsEnabled then
-        makeButton("Disable Godmode", function() self:_CleanupUI(); self:Disable() end)
-    end
-    makeButton("Close", function() self:_CleanupUI() end).BackgroundColor3 = Color3.fromRGB(180, 80, 80)
-end
-
-function Modules.Godmode:HandleCommand(args)
-    local choice = args[1] and args[1]:lower() or nil
-    
-    if choice == "strong" or choice == "forcefield" or choice == "ff" then return self:EnableForceField() end
-    if choice == "hook" or choice == "hooking" or choice == "healthlock" or choice == "lock" then return self:EnableHealthLock() end
-    if choice == "off" or choice == "disable" then return self:Disable() end
-    
-    self:ShowMenu()
-end
+Modules.Godmode = { State = { IsEnabled = false, Method = nil, UI = nil, Connection = nil, LastHealth = 100 } }; function Modules.Godmode:_CleanupUI() if self.State.UI then self.State.UI:Destroy(); self.State.UI = nil end end; function Modules.Godmode:Disable() if not self.State.IsEnabled then return end; self:_CleanupUI(); local char = LocalPlayer.Character; if self.State.Method == "ForceField" and char then local ff = char:FindFirstChild("ZukaGodmodeFF"); if ff then ff:Destroy() end elseif self.State.Method == "HealthLock" and self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end; self.State.IsEnabled = false; self.State.Method = nil; DoNotif("Godmode OFF", 2) end; function Modules.Godmode:EnableForceField() self:Disable(); local char = LocalPlayer.Character; if not char then return DoNotif("Character not found.", 3) end; local ff = Instance.new("ForceField", char); ff.Name = "ZukaGodmodeFF"; self.State.IsEnabled = true; self.State.Method = "ForceField"; DoNotif("Godmode ON (ForceField)", 2) end; function Modules.Godmode:EnableHealthLock() self:Disable(); local char = LocalPlayer.Character; local humanoid = char and char:FindFirstChildOfClass("Humanoid"); if not humanoid then return DoNotif("Humanoid not found.", 3) end; self.State.LastHealth = humanoid.Health; self.State.Connection = humanoid.HealthChanged:Connect(function(newHealth) if newHealth < self.State.LastHealth and newHealth > 0 then humanoid.Health = self.State.LastHealth else self.State.LastHealth = newHealth end end); self.State.IsEnabled = true; self.State.Method = "HealthLock"; DoNotif("Godmode ON (Health Lock)", 2) end; function Modules.Godmode:ShowMenu() self:_CleanupUI(); local gui = Instance.new("ScreenGui"); gui.Name = "GodmodeUI"; NaProtectUI(gui); self.State.UI = gui; local frame = Instance.new("Frame", gui); frame.Size = UDim2.fromOffset(250, 210); frame.Position = UDim2.new(0.5, -125, 0.5, -105); frame.BackgroundColor3 = Color3.fromRGB(35, 35, 45); Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8); local title = Instance.new("TextLabel", frame); title.Size = UDim2.new(1, 0, 0, 30); title.BackgroundTransparency = 1; title.Font = Enum.Font.Code; title.Text = "Godmode Methods"; title.TextColor3 = Color3.fromRGB(200, 220, 255); title.TextSize = 16; local buttonContainer = Instance.new("Frame", frame); buttonContainer.Size = UDim2.new(1, -20, 1, -40); buttonContainer.Position = UDim2.fromOffset(10, 35); buttonContainer.BackgroundTransparency = 1; local list = Instance.new("UIListLayout", buttonContainer); list.Padding = UDim.new(0, 5); list.SortOrder = Enum.SortOrder.LayoutOrder; local function makeButton(text, callback) local btn = Instance.new("TextButton", buttonContainer); btn.Size = UDim2.new(1, 0, 0, 35); btn.BackgroundColor3 = Color3.fromRGB(50, 50, 65); btn.TextColor3 = Color3.fromRGB(220, 220, 230); btn.Font = Enum.Font.Code; btn.Text = text; btn.TextSize = 14; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4); btn.MouseButton1Click:Connect(callback); return btn end; makeButton("Enable: ForceField (Visual)", function() self:_CleanupUI(); self:EnableForceField() end); makeButton("Enable: Health Lock (Silent)", function() self:_CleanupUI(); self:EnableHealthLock() end); if self.State.IsEnabled then makeButton("Disable Godmode", function() self:_CleanupUI(); self:Disable() end) end; makeButton("Close", function() self:_CleanupUI() end).BackgroundColor3 = Color3.fromRGB(180, 80, 80) end; function Modules.Godmode:HandleCommand(args) local choice = args[1] and args[1]:lower() or nil; if choice == "strong" or choice == "forcefield" or choice == "ff" then return self:EnableForceField() end; if choice == "hook" or choice == "hooking" or choice == "healthlock" or choice == "lock" then return self:EnableHealthLock() end; if choice == "off" or choice == "disable" then return self:Disable() end; self:ShowMenu() end
 
 --==============================================================================
 -- iBTools Module
@@ -229,7 +250,7 @@ Modules.iBTools = { State = { IsActive = false, Tool = nil, UI = nil, Highlight 
 --==============================================================================
 -- Command Definitions
 --==============================================================================
-table.insert(CommandInfo, { Name = "cmds", Aliases = {"help"}, Description = "Shows this command list."}); table.insert(CommandInfo, { Name = "cmdbar", Aliases = {"cbar"}, Description = "Toggles the private command bar."}); table.insert(CommandInfo, { Name = "ide", Aliases = {}, Description = "Opens a script execution window."}); table.insert(CommandInfo, { Name = "ibtools", Aliases = {}, Description = "Loads a building helper tool for deleting/modifying parts."}); table.insert(CommandInfo, { Name = "godmode", Aliases = {"god"}, Description = "Toggles invincibility. Use ;god [method|off] or ;god for a menu."}); table.insert(CommandInfo, { Name = "ungodmode", Aliases = {"ungod"}, Description = "Disables invincibility."}); table.insert(CommandInfo, { Name = "speed", Aliases = {}, Description = "Sets walkspeed. ;speed [num]"}); table.insert(CommandInfo, { Name = "fly", Aliases = {}, Description = "Toggles smooth flight mode."}); table.insert(CommandInfo, { Name = "noclip", Aliases = {}, Description = "Toggles walking through walls."}); table.insert(CommandInfo, { Name = "clicktp", Aliases = {}, Description = "Hold Left CTRL to teleport to cursor."}); table.insert(CommandInfo, { Name = "esp", Aliases = {}, Description = "Toggles player outline, name, and team."}); table.insert(CommandInfo, { Name = "grabtools", Aliases = {}, Description = "Auto-grabs tools that appear."}); table.insert(CommandInfo, { Name = "goto", Aliases = {}, Description = "Teleports to a player. ;goto [player]"}); table.insert(CommandInfo, { Name = "reverse", Aliases = {}, Description = "Reverses your character direction."}); table.insert(CommandInfo, { Name = "reach", Aliases = {"swordreach"}, Description = "Extends sword reach. ;reach [num]"}); table.insert(CommandInfo, { Name = "boxreach", Aliases = {}, Description = "Creates a box hitbox. ;boxreach [num]"}); table.insert(CommandInfo, { Name = "resetreach", Aliases = {"unreach"}, Description = "Resets tool reach to normal."}); table.insert(CommandInfo, { Name = "iy", Aliases = {}, Description = "Loads Zuka's personal executor/admin panel."}); table.insert(CommandInfo, { Name = "dex", Aliases = {}, Description = "Opens the Dark Dex explorer for developers."}); table.insert(CommandInfo, { Name = "scripthub", Aliases = {"hub"}, Description = "Opens a versatile script hub GUI."}); table.insert(CommandInfo, { Name = "teleportgui", Aliases = {"tpui", "uviewer"}, Description = "Opens a GUI to teleport to other game places."})
+table.insert(CommandInfo, { Name = "cmds", Aliases = {"help"}, Description = "Shows this command list."}); table.insert(CommandInfo, { Name = "cmdbar", Aliases = {"cbar"}, Description = "Toggles the private command bar."}); table.insert(CommandInfo, { Name = "ide", Aliases = {}, Description = "Opens a script execution window."}); table.insert(CommandInfo, { Name = "ibtools", Aliases = {}, Description = "Loads a building helper tool for deleting/modifying parts."}); table.insert(CommandInfo, { Name = "godmode", Aliases = {"god"}, Description = "Toggles invincibility. Use ;god [method|off] or ;god for a menu."}); table.insert(CommandInfo, { Name = "ungodmode", Aliases = {"ungod"}, Description = "Disables invincibility."}); table.insert(CommandInfo, { Name = "antikick", Aliases = {"ak"}, Description = "Hooks metamethods to prevent being kicked."}); table.insert(CommandInfo, { Name = "speed", Aliases = {}, Description = "Sets walkspeed. ;speed [num]"}); table.insert(CommandInfo, { Name = "fly", Aliases = {}, Description = "Toggles smooth flight mode."}); table.insert(CommandInfo, { Name = "noclip", Aliases = {}, Description = "Toggles walking through walls."}); table.insert(CommandInfo, { Name = "wallwalk", Aliases = {"ww"}, Description = "Toggles walking on walls."}); table.insert(CommandInfo, { Name = "clicktp", Aliases = {}, Description = "Hold Left CTRL to teleport to cursor."}); table.insert(CommandInfo, { Name = "esp", Aliases = {}, Description = "Toggles player outline, name, and team."}); table.insert(CommandInfo, { Name = "grabtools", Aliases = {}, Description = "Auto-grabs tools that appear."}); table.insert(CommandInfo, { Name = "goto", Aliases = {}, Description = "Teleports to a player. ;goto [player]"}); table.insert(CommandInfo, { Name = "reverse", Aliases = {}, Description = "Reverses your character direction."}); table.insert(CommandInfo, { Name = "reach", Aliases = {"swordreach"}, Description = "Extends sword reach. ;reach [num]"}); table.insert(CommandInfo, { Name = "boxreach", Aliases = {}, Description = "Creates a box hitbox. ;boxreach [num]"}); table.insert(CommandInfo, { Name = "resetreach", Aliases = {"unreach"}, Description = "Resets tool reach to normal."}); table.insert(CommandInfo, { Name = "iy", Aliases = {}, Description = "Loads Zuka's personal executor/admin panel."}); table.insert(CommandInfo, { Name = "dex", Aliases = {}, Description = "Opens the Dark Dex explorer for developers."}); table.insert(CommandInfo, { Name = "scripthub", Aliases = {"hub"}, Description = "Opens a versatile script hub GUI."}); table.insert(CommandInfo, { Name = "teleportgui", Aliases = {"tpui", "uviewer"}, Description = "Opens a GUI to teleport to other game places."})
 
 -- Simple and Loadstring Commands
 Commands.speed = function(args) local s = tonumber(args[1]); local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"); if not h then DoNotif("Humanoid not found!", 3) return end; if s and s > 0 then h.WalkSpeed = s; DoNotif("WalkSpeed set to: " .. s, 3) else DoNotif("Invalid speed.", 3) end end
@@ -241,10 +262,10 @@ Commands.scripthub = function() pcall(function() loadstring(game:HttpGet("https:
 Commands.teleportgui = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Universe%20Viewer"))() end); DoNotif("Loading Teleport GUI...", 2) end
 
 -- Command wrappers for modules
-Commands.godmode = function(args) Modules.Godmode:HandleCommand(args) end; Commands.ungodmode = function() Modules.Godmode:Disable() end; Commands.fly = function() Modules.Fly:Toggle() end; Commands.flyspeed = function(args) Modules.Fly:SetSpeed(args[1]) end; Commands.noclip = function() Modules.Noclip:Toggle() end; Commands.clickfling = function() Modules.ClickFling:Enable() end; Commands.unclickfling = function() Modules.ClickFling:Disable() end; Commands.cmds = function() Modules.CommandsUI:Toggle() end; Commands.reach = function(args) Modules.Reach:Apply("directional", tonumber(args[1]) or 15) end; Commands.boxreach = function(args) Modules.Reach:Apply("box", tonumber(args[1]) or 15) end; Commands.resetreach = function() Modules.Reach:Reset() end; Commands.cmdbar = function() Modules.CommandBar:Toggle() end; Commands.ide = function() Modules.IDE:Toggle() end; Commands.esp = function() Modules.ESP:Toggle() end; Commands.clicktp = function() Modules.ClickTP:Toggle() end; Commands.grabtools = function() Modules.GrabTools:Toggle() end; Commands.ibtools = function() Modules.iBTools:Toggle() end
+Commands.godmode = function(args) Modules.Godmode:HandleCommand(args) end; Commands.ungodmode = function() Modules.Godmode:Disable() end; Commands.fly = function() Modules.Fly:Toggle() end; Commands.flyspeed = function(args) Modules.Fly:SetSpeed(args[1]) end; Commands.noclip = function() Modules.Noclip:Toggle() end; Commands.clickfling = function() Modules.ClickFling:Enable() end; Commands.unclickfling = function() Modules.ClickFling:Disable() end; Commands.cmds = function() Modules.CommandsUI:Toggle() end; Commands.reach = function(args) Modules.Reach:Apply("directional", tonumber(args[1]) or 15) end; Commands.boxreach = function(args) Modules.Reach:Apply("box", tonumber(args[1]) or 15) end; Commands.resetreach = function() Modules.Reach:Reset() end; Commands.cmdbar = function() Modules.CommandBar:Toggle() end; Commands.ide = function() Modules.IDE:Toggle() end; Commands.esp = function() Modules.ESP:Toggle() end; Commands.clicktp = function() Modules.ClickTP:Toggle() end; Commands.grabtools = function() Modules.GrabTools:Toggle() end; Commands.ibtools = function() Modules.iBTools:Toggle() end; Commands.wallwalk = function() Modules.WallWalk:Toggle() end; Commands.antikick = function() Modules.AntiKick:Toggle() end
 
 -- Command Aliases
-Commands.god = Commands.godmode; Commands.ungod = Commands.ungodmode; Commands.help = Commands.cmds; Commands.cbar = Commands.cmdbar; Commands.swordreach = Commands.reach; Commands.unreach = Commands.resetreach; Commands.hub = Commands.scripthub; Commands.tpui = Commands.teleportgui; Commands.uviewer = Commands.teleportgui
+Commands.god = Commands.godmode; Commands.ungod = Commands.ungodmode; Commands.help = Commands.cmds; Commands.cbar = Commands.cmdbar; Commands.swordreach = Commands.reach; Commands.unreach = Commands.resetreach; Commands.hub = Commands.scripthub; Commands.tpui = Commands.teleportgui; Commands.uviewer = Commands.teleportgui; Commands.ww = Commands.wallwalk; Commands.ak = Commands.antikick
 
 --==============================================================================
 -- Centralized Command Processor
@@ -263,4 +284,4 @@ end
 --==============================================================================
 LocalPlayer.Chatted:Connect(processCommand)
 Modules.CommandBar:Toggle() -- Start with the command bar open by default
-DoNotif("Zuka Command Handler v15 (Standalone Godmode) | Prefix: '" .. Prefix .. "' | ;cmds for help", 6)
+DoNotif("Zuka Command Handler v16 (AntiKick Integration) | Prefix: '" .. Prefix .. "' | ;cmds for help", 6)
