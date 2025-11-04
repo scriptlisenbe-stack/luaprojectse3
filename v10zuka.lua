@@ -32,7 +32,7 @@ local function showAccessPrompt()
     box.TextColor3 = Color3.fromRGB(255,255,255)
     box.Font = Enum.Font.Code
     box.TextSize = 18
-    box.PlaceholderText = "Enter Key.."
+    box.PlaceholderText = "got root?"
     box.Text = ""
     local okBtn = Instance.new("TextButton", frame)
     okBtn.Size = UDim2.new(0, 120, 0, 32)
@@ -74,7 +74,7 @@ showAccessPrompt()
 
 --[[
     @Author: Zuka Tech
-    @Date: 11/3/2025 (Definitive Version)
+    @Date: 11/4/2025 (Godmode Self-Contained)
     @Description: A modular, client-sided chat command system for Zuka in Roblox.
 ]]
 
@@ -115,143 +115,136 @@ Modules.ClickTP = { State = { IsActive = false, Connection = nil } }; function M
 Modules.GrabTools = { State = { IsActive = false, Connection = nil } }; function Modules.GrabTools:Toggle() self.State.IsActive = not self.State.IsActive; if self.State.IsActive then self.State.Connection = workspace.ChildAdded:Connect(function(c) if c:IsA("Tool") then local bp = LocalPlayer:FindFirstChildOfClass("Backpack"); if bp then c:Clone().Parent = bp; DoNotif("Grabbed " .. c.Name, 2) end end end) else if self.State.Connection then self.State.Connection:Disconnect(); self.State.Connection = nil end end; DoNotif("Grab Tools " .. (self.State.IsActive and "Enabled" or "Disabled"), 3) end
 
 --==============================================================================
--- iBTools Module (NEW)
+-- Godmode Module (Self-Contained)
 --==============================================================================
-Modules.iBTools = { State = { IsActive = false, Tool = nil, UI = nil, Highlight = nil, Connections = {}, History = {}, SaveHistory = {}, CurrentPart = nil, CurrentMode = "delete" } }
+Modules.Godmode = { 
+    State = { 
+        IsEnabled = false, 
+        Method = nil, 
+        UI = nil,
+        Connection = nil, -- For HealthLock
+        LastHealth = 100
+    } 
+}
 
-function Modules.iBTools:_CleanupUI()
-    if self.State.UI then self.State.UI:Destroy() end
-    if self.State.Highlight then self.State.Highlight:Destroy() end
-    for _, conn in ipairs(self.State.Connections) do conn:Disconnect() end
-    self.State.UI, self.State.Highlight = nil, nil
-    table.clear(self.State.Connections)
+function Modules.Godmode:_CleanupUI()
+    if self.State.UI then
+        self.State.UI:Destroy()
+        self.State.UI = nil
+    end
 end
 
-function Modules.iBTools:Disable()
-    if not self.State.IsActive then return end
+function Modules.Godmode:Disable()
+    if not self.State.IsEnabled then return end
     self:_CleanupUI()
-    if self.State.Tool then self.State.Tool:Destroy() end
-    self.State = { IsActive = false, Tool = nil, UI = nil, Highlight = nil, Connections = {}, History = {}, SaveHistory = {}, CurrentPart = nil, CurrentMode = "delete" }
-    DoNotif("iBTools unloaded.", 3)
+
+    local char = LocalPlayer.Character
+    if self.State.Method == "ForceField" and char then
+        local ff = char:FindFirstChild("ZukaGodmodeFF")
+        if ff then ff:Destroy() end
+    elseif self.State.Method == "HealthLock" and self.State.Connection then
+        self.State.Connection:Disconnect()
+        self.State.Connection = nil
+    end
+    
+    self.State.IsEnabled = false
+    self.State.Method = nil
+    DoNotif("Godmode OFF", 2)
 end
 
-function Modules.iBTools:Enable()
-    if self.State.IsActive then return DoNotif("iBTools is already active.", 3) end
-    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-    if not backpack then return DoNotif("Backpack not found.", 3) end
+function Modules.Godmode:EnableForceField()
+    self:Disable() -- Always disable previous mode first
+    local char = LocalPlayer.Character
+    if not char then return DoNotif("Character not found.", 3) end
     
-    self.State.IsActive = true
-    self.State.Tool = Instance.new("Tool", backpack)
-    self.State.Tool.Name = "iBTools"
-    self.State.Tool.RequiresHandle = false
+    local ff = Instance.new("ForceField", char)
+    ff.Name = "ZukaGodmodeFF" -- Give it a unique name to avoid conflicts
     
-    self.State.Tool.Equipped:Connect(function(mouse)
-        local state = self.State
-        
-        -- Create UI and Highlight
-        state.Highlight = Instance.new("SelectionBox"); state.Highlight.Name = "iBToolsSelection"; state.Highlight.LineThickness = 0.04; state.Highlight.Color3 = Color3.fromRGB(0, 170, 255); state.Highlight.Parent = workspace.CurrentCamera
-        
-        -- Local helper functions
-        local function formatVectorString(vec) return string.format("Vector3.new(%s,%s,%s)", tostring(vec.X), tostring(vec.Y), tostring(vec.Z)) end
-        local function updateStatus(part)
-            if not state.UI then return end
-            local statusLabel = state.UI:FindFirstChild("Panel", true) and state.UI.Panel:FindFirstChild("Status")
-            if not statusLabel then return end
-            
-            local targetText = "none"
-            if part then targetText = part:GetFullName() end
-            statusLabel.Text = string.format("Mode: %s | Target: %s", state.CurrentMode:upper(), targetText)
-        end
-        local function setTarget(part)
-            if part and not part:IsA("BasePart") then part = nil end
-            state.CurrentPart = part
-            if state.Highlight then state.Highlight.Adornee = part end
-            updateStatus(part)
-        end
+    self.State.IsEnabled = true
+    self.State.Method = "ForceField"
+    DoNotif("Godmode ON (ForceField)", 2)
+end
 
-        -- Action functions
-        local modeHandlers = {
-            delete = function(part)
-                table.insert(state.History, {part = part, parent = part.Parent, cframe = part.CFrame})
-                table.insert(state.SaveHistory, {name = part.Name, position = part.Position})
-                part.Parent = nil
-                setTarget(nil)
-                DoNotif("Deleted '"..part.Name.."'", 2)
-            end,
-            anchor = function(part) part.Anchored = not part.Anchored; updateStatus(part); DoNotif(string.format("%s anchored %s", part.Name, part.Anchored and "enabled" or "disabled"), 2) end,
-            collide = function(part) part.CanCollide = not part.CanCollide; updateStatus(part); DoNotif(string.format("%s CanCollide %s", part.Name, part.CanCollide and "enabled" or "disabled"), 2) end
-        }
-        
-        local uiActions = {
-            setMode = function(mode) state.CurrentMode = mode; updateStatus(state.CurrentPart) end,
-            getMode = function() return state.CurrentMode end,
-            undo = function()
-                local record = table.remove(state.History)
-                if not record then return DoNotif("Nothing to undo.", 2) end
-                record.part.Parent = record.parent
-                pcall(function() record.part.CFrame = record.cframe end)
-                setTarget(record.part)
-                DoNotif("Restored '"..record.part.Name.."'", 2)
-            end,
-            copy = function()
-                if #state.SaveHistory == 0 then return DoNotif("No deleted parts to export.", 3) end
-                local lines = {}
-                for _, data in ipairs(state.SaveHistory) do
-                    local vec = formatVectorString(data.position)
-                    table.insert(lines, string.format("for _,v in ipairs(workspace:FindPartsInRegion3(Region3.new(%s, %s), nil, math.huge)) do if v.Name == %q then v:Destroy() end end", vec, vec, data.name))
-                end
-                setclipboard(table.concat(lines, "\n"))
-                DoNotif("Copied delete script to clipboard.", 3)
-            end
-        }
-        
-        -- UI Creation
-        local gui = Instance.new("ScreenGui"); gui.Name = "iBToolsUI"; NaProtectUI(gui); self.State.UI = gui
-        local frame = Instance.new("Frame", gui); frame.Name = "Panel"; frame.Size = UDim2.new(0, 240, 0, 260); frame.Position = UDim2.new(0.05, 0, 0.4, 0); frame.BackgroundColor3 = Color3.fromRGB(26, 26, 26); Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-        local header = Instance.new("Frame", frame); header.Name = "Header"; header.Size = UDim2.new(1, 0, 0, 36); header.BackgroundColor3 = Color3.fromRGB(38, 38, 38); header.Active = true
-        local title = Instance.new("TextLabel", header); title.BackgroundTransparency = 1; title.Font = Enum.Font.GothamSemibold; title.TextSize = 16; title.TextXAlignment = Enum.TextXAlignment.Left; title.TextColor3 = Color3.fromRGB(255, 255, 255); title.Text = "iBuild Tools"; title.Size = UDim2.new(1, -40, 1, 0); title.Position = UDim2.new(0, 10, 0, 0)
-        local statusLabel = Instance.new("TextLabel", frame); statusLabel.Name = "Status"; statusLabel.BackgroundTransparency = 1; statusLabel.Font = Enum.Font.Gotham; statusLabel.TextSize = 14; statusLabel.TextXAlignment = Enum.TextXAlignment.Left; statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200); statusLabel.Position = UDim2.new(0, 12, 0, 46); statusLabel.Size = UDim2.new(1, -24, 0, 20); statusLabel.Text = "Target: none"
-        local buttonHolder = Instance.new("Frame", frame); buttonHolder.BackgroundTransparency = 1; buttonHolder.Position = UDim2.new(0, 12, 0, 72); buttonHolder.Size = UDim2.new(1, -24, 1, -84); local layout = Instance.new("UIListLayout", buttonHolder); layout.Padding = UDim.new(0, 6)
-        local modeButtons = {}; local function makeButton(text, parent) local btn=Instance.new("TextButton",parent or buttonHolder); btn.Name=text; btn.Size=UDim2.new(1,0,0,34); btn.BackgroundColor3=Color3.fromRGB(52,52,52); btn.Font=Enum.Font.GothamSemibold; btn.TextSize=14; btn.TextColor3=Color3.fromRGB(255,255,255); btn.Text=text; Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6); return btn end
-        local function refreshModeButtons() for mode,btn in pairs(modeButtons) do btn.BackgroundColor3 = (state.CurrentMode == mode and Color3.fromRGB(80,110,255) or Color3.fromRGB(52,52,52)) end end
-        for mode, label in pairs({delete="Delete", anchor="Toggle Anchor", collide="Toggle CanCollide"}) do local btn = makeButton(label); modeButtons[mode] = btn; btn.MouseButton1Click:Connect(function() uiActions.setMode(mode); refreshModeButtons() end) end
-        makeButton("Undo Delete").MouseButton1Click:Connect(uiActions.undo); makeButton("Copy Delete Script").MouseButton1Click:Connect(uiActions.copy)
-        local function drag(o,h) local d,s,p; h.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d,s,p=true,i.Position,o.Position;i.Changed:Connect(function()if i.UserInputState==Enum.UserInputState.End then d=false end end)end end); h.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseMovement and d then o.Position=UDim2.new(p.X.Scale,p.X.Offset+i.Position.X-s.X,p.Y.Scale,p.Y.Offset+i.Position.Y-s.Y)end end)end; drag(frame,header)
-        refreshModeButtons()
-        
-        -- Connect mouse events
-        table.insert(state.Connections, mouse.Move:Connect(function() setTarget(mouse.Target) end))
-        table.insert(state.Connections, mouse.Button1Down:Connect(function() if state.CurrentPart then modeHandlers[state.CurrentMode](state.CurrentPart) end end))
+function Modules.Godmode:EnableHealthLock()
+    self:Disable() -- Always disable previous mode first
+    local char = LocalPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return DoNotif("Humanoid not found.", 3) end
+
+    self.State.LastHealth = humanoid.Health
+    self.State.Connection = humanoid.HealthChanged:Connect(function(newHealth)
+        if newHealth < self.State.LastHealth and newHealth > 0 then
+            -- Took damage, revert it
+            humanoid.Health = self.State.LastHealth
+        else
+            -- Healed or unchanged, update our baseline health
+            self.State.LastHealth = newHealth
+        end
     end)
     
-    self.State.Tool.Unequipped:Connect(function() self:_CleanupUI() end)
-    self.State.Tool.AncestryChanged:Connect(function(_, parent) if not parent then self:Disable() end end)
-    DoNotif("iBTools loaded. Equip the tool to use it.", 3)
+    self.State.IsEnabled = true
+    self.State.Method = "HealthLock"
+    DoNotif("Godmode ON (Health Lock)", 2)
 end
 
-function Modules.iBTools:Toggle()
-    if self.State.IsActive then self:Disable() else self:Enable() end
+function Modules.Godmode:ShowMenu()
+    self:_CleanupUI()
+
+    local gui = Instance.new("ScreenGui"); gui.Name = "GodmodeUI"; NaProtectUI(gui); self.State.UI = gui
+    local frame = Instance.new("Frame", gui); frame.Size = UDim2.fromOffset(250, 210); frame.Position = UDim2.new(0.5, -125, 0.5, -105); frame.BackgroundColor3 = Color3.fromRGB(35, 35, 45); Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+    local title = Instance.new("TextLabel", frame); title.Size = UDim2.new(1, 0, 0, 30); title.BackgroundTransparency = 1; title.Font = Enum.Font.Code; title.Text = "Godmode Methods"; title.TextColor3 = Color3.fromRGB(200, 220, 255); title.TextSize = 16
+    
+    local buttonContainer = Instance.new("Frame", frame); buttonContainer.Size = UDim2.new(1, -20, 1, -40); buttonContainer.Position = UDim2.fromOffset(10, 35); buttonContainer.BackgroundTransparency = 1
+    local list = Instance.new("UIListLayout", buttonContainer); list.Padding = UDim.new(0, 5); list.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    local function makeButton(text, callback)
+        local btn = Instance.new("TextButton", buttonContainer); btn.Size = UDim2.new(1, 0, 0, 35); btn.BackgroundColor3 = Color3.fromRGB(50, 50, 65); btn.TextColor3 = Color3.fromRGB(220, 220, 230); btn.Font = Enum.Font.Code; btn.Text = text; btn.TextSize = 14; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+        btn.MouseButton1Click:Connect(callback)
+        return btn
+    end
+    
+    makeButton("Enable: ForceField (Visual)", function() self:_CleanupUI(); self:EnableForceField() end)
+    makeButton("Enable: Health Lock (Silent)", function() self:_CleanupUI(); self:EnableHealthLock() end)
+    if self.State.IsEnabled then
+        makeButton("Disable Godmode", function() self:_CleanupUI(); self:Disable() end)
+    end
+    makeButton("Close", function() self:_CleanupUI() end).BackgroundColor3 = Color3.fromRGB(180, 80, 80)
 end
+
+function Modules.Godmode:HandleCommand(args)
+    local choice = args[1] and args[1]:lower() or nil
+    
+    if choice == "strong" or choice == "forcefield" or choice == "ff" then return self:EnableForceField() end
+    if choice == "hook" or choice == "hooking" or choice == "healthlock" or choice == "lock" then return self:EnableHealthLock() end
+    if choice == "off" or choice == "disable" then return self:Disable() end
+    
+    self:ShowMenu()
+end
+
+--==============================================================================
+-- iBTools Module
+--==============================================================================
+Modules.iBTools = { State = { IsActive = false, Tool = nil, UI = nil, Highlight = nil, Connections = {}, History = {}, SaveHistory = {}, CurrentPart = nil, CurrentMode = "delete" } }; function Modules.iBTools:_CleanupUI() if self.State.UI then self.State.UI:Destroy() end; if self.State.Highlight then self.State.Highlight:Destroy() end; for _, conn in ipairs(self.State.Connections) do conn:Disconnect() end; self.State.UI, self.State.Highlight = nil, nil; table.clear(self.State.Connections) end; function Modules.iBTools:Disable() if not self.State.IsActive then return end; self:_CleanupUI(); if self.State.Tool then self.State.Tool:Destroy() end; self.State = { IsActive = false, Tool = nil, UI = nil, Highlight = nil, Connections = {}, History = {}, SaveHistory = {}, CurrentPart = nil, CurrentMode = "delete" }; DoNotif("iBTools unloaded.", 3) end; function Modules.iBTools:Enable() if self.State.IsActive then return DoNotif("iBTools is already active.", 3) end; local backpack = LocalPlayer:FindFirstChildOfClass("Backpack"); if not backpack then return DoNotif("Backpack not found.", 3) end; self.State.IsActive = true; self.State.Tool = Instance.new("Tool", backpack); self.State.Tool.Name = "iBTools"; self.State.Tool.RequiresHandle = false; self.State.Tool.Equipped:Connect(function(mouse) local state = self.State; state.Highlight = Instance.new("SelectionBox"); state.Highlight.Name = "iBToolsSelection"; state.Highlight.LineThickness = 0.04; state.Highlight.Color3 = Color3.fromRGB(0, 170, 255); state.Highlight.Parent = workspace.CurrentCamera; local function formatVectorString(vec) return string.format("Vector3.new(%s,%s,%s)", tostring(vec.X), tostring(vec.Y), tostring(vec.Z)) end; local function updateStatus(part) if not state.UI then return end; local statusLabel = state.UI:FindFirstChild("Panel", true) and state.UI.Panel:FindFirstChild("Status"); if not statusLabel then return end; local targetText = "none"; if part then targetText = part:GetFullName() end; statusLabel.Text = string.format("Mode: %s | Target: %s", state.CurrentMode:upper(), targetText) end; local function setTarget(part) if part and not part:IsA("BasePart") then part = nil end; state.CurrentPart = part; if state.Highlight then state.Highlight.Adornee = part end; updateStatus(part) end; local modeHandlers = { delete = function(part) table.insert(state.History, {part = part, parent = part.Parent, cframe = part.CFrame}); table.insert(state.SaveHistory, {name = part.Name, position = part.Position}); part.Parent = nil; setTarget(nil); DoNotif("Deleted '"..part.Name.."'", 2) end, anchor = function(part) part.Anchored = not part.Anchored; updateStatus(part); DoNotif(string.format("%s anchored %s", part.Name, part.Anchored and "enabled" or "disabled"), 2) end, collide = function(part) part.CanCollide = not part.CanCollide; updateStatus(part); DoNotif(string.format("%s CanCollide %s", part.Name, part.CanCollide and "enabled" or "disabled"), 2) end }; local uiActions = { setMode = function(mode) state.CurrentMode = mode; updateStatus(state.CurrentPart) end, undo = function() local r = table.remove(state.History); if r then r.part.Parent = r.parent; pcall(function() r.part.CFrame = r.cframe end); setTarget(r.part); DoNotif("Restored '"..r.part.Name.."'", 2) else DoNotif("Nothing to undo.", 2) end end, copy = function() if #state.SaveHistory == 0 then return DoNotif("No deleted parts to export.", 3) end; local l = {}; for _, d in ipairs(state.SaveHistory) do table.insert(l, string.format("for _,v in ipairs(workspace:FindPartsInRegion3(Region3.new(%s, %s), nil, math.huge)) do if v.Name == %q then v:Destroy() end end", formatVectorString(d.position), formatVectorString(d.position), d.name)) end; setclipboard(table.concat(l, "\n")); DoNotif("Copied delete script to clipboard.", 3) end }; local gui = Instance.new("ScreenGui"); gui.Name = "iBToolsUI"; NaProtectUI(gui); self.State.UI = gui; local f = Instance.new("Frame", gui); f.Name = "Panel"; f.Size = UDim2.new(0, 240, 0, 260); f.Position = UDim2.new(0.05, 0, 0.4, 0); f.BackgroundColor3 = Color3.fromRGB(26, 26, 26); Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8); local h = Instance.new("Frame", f); h.Name = "Header"; h.Size = UDim2.new(1, 0, 0, 36); h.BackgroundColor3 = Color3.fromRGB(38, 38, 38); h.Active = true; local t = Instance.new("TextLabel", h); t.BackgroundTransparency=1;t.Font=Enum.Font.GothamSemibold;t.TextSize=16;t.TextXAlignment=Enum.TextXAlignment.Left;t.TextColor3=Color3.fromRGB(255,255,255);t.Text="iBuild Tools";t.Size=UDim2.new(1,-40,1,0);t.Position=UDim2.new(0,10,0,0);local s=Instance.new("TextLabel",f);s.Name="Status";s.BackgroundTransparency=1;s.Font=Enum.Font.Gotham;s.TextSize=14;s.TextXAlignment=Enum.TextXAlignment.Left;s.TextColor3=Color3.fromRGB(200,200,200);s.Position=UDim2.new(0,12,0,46);s.Size=UDim2.new(1,-24,0,20);s.Text="Target: none";local bH=Instance.new("Frame",f);bH.BackgroundTransparency=1;bH.Position=UDim2.new(0,12,0,72);bH.Size=UDim2.new(1,-24,1,-84);local l=Instance.new("UIListLayout",bH);l.Padding=UDim.new(0,6);local mB={};local function btn(txt)local b=Instance.new("TextButton",bH);b.Name=txt;b.Size=UDim2.new(1,0,0,34);b.BackgroundColor3=Color3.fromRGB(52,52,52);b.Font=Enum.Font.GothamSemibold;b.TextSize=14;b.TextColor3=Color3.fromRGB(255,255,255);b.Text=txt;Instance.new("UICorner",b).CornerRadius=UDim.new(0,6);return b end;local function rMB()for m,b in pairs(mB)do b.BackgroundColor3=(state.CurrentMode==m and Color3.fromRGB(80,110,255)or Color3.fromRGB(52,52,52))end end;for m,lbl in pairs({delete="Delete",anchor="Toggle Anchor",collide="Toggle CanCollide"})do local b=btn(lbl);mB[m]=b;b.MouseButton1Click:Connect(function()uiActions.setMode(m);rMB()end)end;btn("Undo Delete").MouseButton1Click:Connect(uiActions.undo);btn("Copy Delete Script").MouseButton1Click:Connect(uiActions.copy);local function drag(o,h) local d,s,p; h.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then d,s,p=true,i.Position,o.Position;i.Changed:Connect(function()if i.UserInputState==Enum.UserInputState.End then d=false end end)end end); h.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseMovement and d then o.Position=UDim2.new(p.X.Scale,p.X.Offset+i.Position.X-s.X,p.Y.Scale,p.Y.Offset+i.Position.Y-s.Y)end end)end;drag(f,h);rMB(); table.insert(state.Connections, mouse.Move:Connect(function() setTarget(mouse.Target) end)); table.insert(state.Connections, mouse.Button1Down:Connect(function() if state.CurrentPart then modeHandlers[state.CurrentMode](state.CurrentPart) end end)) end); self.State.Tool.Unequipped:Connect(function() self:_CleanupUI() end); self.State.Tool.AncestryChanged:Connect(function(_, parent) if not parent then self:Disable() end end); DoNotif("iBTools loaded. Equip the tool to use it.", 3) end; function Modules.iBTools:Toggle() if self.State.IsActive then self:Disable() else self:Enable() end end
 
 --==============================================================================
 -- Command Definitions
 --==============================================================================
-table.insert(CommandInfo, { Name = "cmds", Aliases = {"help"}, Description = "Shows this command list."}); table.insert(CommandInfo, { Name = "cmdbar", Aliases = {"cbar"}, Description = "Toggles the private command bar."}); table.insert(CommandInfo, { Name = "ide", Aliases = {}, Description = "Opens a script execution window."}); table.insert(CommandInfo, { Name = "ibtools", Aliases = {}, Description = "Loads a building helper tool for deleting/modifying parts."}); table.insert(CommandInfo, { Name = "speed", Aliases = {}, Description = "Sets walkspeed. ;speed [num]"}); table.insert(CommandInfo, { Name = "fly", Aliases = {}, Description = "Toggles smooth flight mode."}); table.insert(CommandInfo, { Name = "noclip", Aliases = {}, Description = "Toggles walking through walls."}); table.insert(CommandInfo, { Name = "clicktp", Aliases = {}, Description = "Hold Left CTRL to teleport to cursor."}); table.insert(CommandInfo, { Name = "esp", Aliases = {}, Description = "Toggles player outline, name, and team."}); table.insert(CommandInfo, { Name = "grabtools", Aliases = {}, Description = "Auto-grabs tools that appear."}); table.insert(CommandInfo, { Name = "goto", Aliases = {}, Description = "Teleports to a player. ;goto [player]"}); table.insert(CommandInfo, { Name = "reverse", Aliases = {}, Description = "Reverses your character direction."}); table.insert(CommandInfo, { Name = "reach", Aliases = {"swordreach"}, Description = "Extends sword reach. ;reach [num]"}); table.insert(CommandInfo, { Name = "boxreach", Aliases = {}, Description = "Creates a box hitbox. ;boxreach [num]"}); table.insert(CommandInfo, { Name = "resetreach", Aliases = {"unreach"}, Description = "Resets tool reach to normal."}); table.insert(CommandInfo, { Name = "iy", Aliases = {}, Description = "Loads Zuka's personal executor/admin panel."}); table.insert(CommandInfo, { Name = "dex", Aliases = {}, Description = "Opens the Dark Dex explorer for developers."}); table.insert(CommandInfo, { Name = "scripthub", Aliases = {"hub"}, Description = "Opens a versatile script hub GUI."}); table.insert(CommandInfo, { Name = "teleportgui", Aliases = {"tpui", "uviewer"}, Description = "Opens a GUI to teleport to other game places."})
+table.insert(CommandInfo, { Name = "cmds", Aliases = {"help"}, Description = "Shows this command list."}); table.insert(CommandInfo, { Name = "cmdbar", Aliases = {"cbar"}, Description = "Toggles the private command bar."}); table.insert(CommandInfo, { Name = "ide", Aliases = {}, Description = "Opens a script execution window."}); table.insert(CommandInfo, { Name = "ibtools", Aliases = {}, Description = "Loads a building helper tool for deleting/modifying parts."}); table.insert(CommandInfo, { Name = "godmode", Aliases = {"god"}, Description = "Toggles invincibility. Use ;god [method|off] or ;god for a menu."}); table.insert(CommandInfo, { Name = "ungodmode", Aliases = {"ungod"}, Description = "Disables invincibility."}); table.insert(CommandInfo, { Name = "speed", Aliases = {}, Description = "Sets walkspeed. ;speed [num]"}); table.insert(CommandInfo, { Name = "fly", Aliases = {}, Description = "Toggles smooth flight mode."}); table.insert(CommandInfo, { Name = "noclip", Aliases = {}, Description = "Toggles walking through walls."}); table.insert(CommandInfo, { Name = "clicktp", Aliases = {}, Description = "Hold Left CTRL to teleport to cursor."}); table.insert(CommandInfo, { Name = "esp", Aliases = {}, Description = "Toggles player outline, name, and team."}); table.insert(CommandInfo, { Name = "grabtools", Aliases = {}, Description = "Auto-grabs tools that appear."}); table.insert(CommandInfo, { Name = "goto", Aliases = {}, Description = "Teleports to a player. ;goto [player]"}); table.insert(CommandInfo, { Name = "reverse", Aliases = {}, Description = "Reverses your character direction."}); table.insert(CommandInfo, { Name = "reach", Aliases = {"swordreach"}, Description = "Extends sword reach. ;reach [num]"}); table.insert(CommandInfo, { Name = "boxreach", Aliases = {}, Description = "Creates a box hitbox. ;boxreach [num]"}); table.insert(CommandInfo, { Name = "resetreach", Aliases = {"unreach"}, Description = "Resets tool reach to normal."}); table.insert(CommandInfo, { Name = "iy", Aliases = {}, Description = "Loads Zuka's personal executor/admin panel."}); table.insert(CommandInfo, { Name = "dex", Aliases = {}, Description = "Opens the Dark Dex explorer for developers."}); table.insert(CommandInfo, { Name = "scripthub", Aliases = {"hub"}, Description = "Opens a versatile script hub GUI."}); table.insert(CommandInfo, { Name = "teleportgui", Aliases = {"tpui", "uviewer"}, Description = "Opens a GUI to teleport to other game places."})
 
 -- Simple and Loadstring Commands
 Commands.speed = function(args) local s = tonumber(args[1]); local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"); if not h then DoNotif("Humanoid not found!", 3) return end; if s and s > 0 then h.WalkSpeed = s; DoNotif("WalkSpeed set to: " .. s, 3) else DoNotif("Invalid speed.", 3) end end
 Commands.goto = function(args) local name = tostring(args[1]):lower(); if not name then return DoNotif("Specify a player.", 3) end; for _, plr in ipairs(Players:GetPlayers()) do if plr.Name:lower():sub(1, #name) == name then local hrp = LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart; local thrp = plr.Character and plr.Character.HumanoidRootPart; if hrp and thrp then hrp.CFrame = thrp.CFrame + Vector3.new(0,3,0); DoNotif("Teleported to "..plr.Name, 3) else DoNotif("Target has no character.",3) end; return end end; DoNotif("Player not found.", 3) end
 Commands.reverse = function() local hrp = LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart; if hrp then hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.pi, 0) end end
 Commands.iy = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/scriptlisenbe-stack/luaprojectse3/refs/heads/main/ZukasExecutor.lua"))() end); DoNotif("Loading Zuka's Executor...", 3) end
-Commands.dex = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Babyhamsta/RBLX_Scripts/main/Universal/Bypassed_Dark_Dex.lua"))() end); DoNotif("Loading Dark Dex...", 3) end
+Commands.dex = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/scriptlisenbe-stack/luaprojectse3/refs/heads/main/CustomDex.lua"))() end); DoNotif("Loading Dex++", 3) end
 Commands.scripthub = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/ScriptHubNA.lua"))() end); DoNotif("Loading Script Hub...", 2) end
 Commands.teleportgui = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Universe%20Viewer"))() end); DoNotif("Loading Teleport GUI...", 2) end
 
 -- Command wrappers for modules
-Commands.fly = function() Modules.Fly:Toggle() end; Commands.flyspeed = function(args) Modules.Fly:SetSpeed(args[1]) end; Commands.noclip = function() Modules.Noclip:Toggle() end; Commands.clickfling = function() Modules.ClickFling:Enable() end; Commands.unclickfling = function() Modules.ClickFling:Disable() end; Commands.cmds = function() Modules.CommandsUI:Toggle() end; Commands.reach = function(args) Modules.Reach:Apply("directional", tonumber(args[1]) or 15) end; Commands.boxreach = function(args) Modules.Reach:Apply("box", tonumber(args[1]) or 15) end; Commands.resetreach = function() Modules.Reach:Reset() end; Commands.cmdbar = function() Modules.CommandBar:Toggle() end; Commands.ide = function() Modules.IDE:Toggle() end; Commands.esp = function() Modules.ESP:Toggle() end; Commands.clicktp = function() Modules.ClickTP:Toggle() end; Commands.grabtools = function() Modules.GrabTools:Toggle() end; Commands.ibtools = function() Modules.iBTools:Toggle() end
+Commands.godmode = function(args) Modules.Godmode:HandleCommand(args) end; Commands.ungodmode = function() Modules.Godmode:Disable() end; Commands.fly = function() Modules.Fly:Toggle() end; Commands.flyspeed = function(args) Modules.Fly:SetSpeed(args[1]) end; Commands.noclip = function() Modules.Noclip:Toggle() end; Commands.clickfling = function() Modules.ClickFling:Enable() end; Commands.unclickfling = function() Modules.ClickFling:Disable() end; Commands.cmds = function() Modules.CommandsUI:Toggle() end; Commands.reach = function(args) Modules.Reach:Apply("directional", tonumber(args[1]) or 15) end; Commands.boxreach = function(args) Modules.Reach:Apply("box", tonumber(args[1]) or 15) end; Commands.resetreach = function() Modules.Reach:Reset() end; Commands.cmdbar = function() Modules.CommandBar:Toggle() end; Commands.ide = function() Modules.IDE:Toggle() end; Commands.esp = function() Modules.ESP:Toggle() end; Commands.clicktp = function() Modules.ClickTP:Toggle() end; Commands.grabtools = function() Modules.GrabTools:Toggle() end; Commands.ibtools = function() Modules.iBTools:Toggle() end
 
 -- Command Aliases
-Commands.help = Commands.cmds; Commands.cbar = Commands.cmdbar; Commands.swordreach = Commands.reach; Commands.unreach = Commands.resetreach; Commands.hub = Commands.scripthub; Commands.tpui = Commands.teleportgui; Commands.uviewer = Commands.teleportgui
+Commands.god = Commands.godmode; Commands.ungod = Commands.ungodmode; Commands.help = Commands.cmds; Commands.cbar = Commands.cmdbar; Commands.swordreach = Commands.reach; Commands.unreach = Commands.resetreach; Commands.hub = Commands.scripthub; Commands.tpui = Commands.teleportgui; Commands.uviewer = Commands.teleportgui
 
 --==============================================================================
 -- Centralized Command Processor
@@ -270,4 +263,4 @@ end
 --==============================================================================
 LocalPlayer.Chatted:Connect(processCommand)
 Modules.CommandBar:Toggle() -- Start with the command bar open by default
-DoNotif("Zuka Command Handler v13 (Definitive) | Prefix: '" .. Prefix .. "' | ;cmds for help", 6)
+DoNotif("Zuka Command Handler v15 (Standalone Godmode) | Prefix: '" .. Prefix .. "' | ;cmds for help", 6)
