@@ -8,7 +8,6 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Simple notify helper
@@ -21,28 +20,6 @@ local function notify(title, text, duration)
         })
     end)
 end
-
--- Compatibility: table.find shim for environments without it
-local function tableFind(tbl, val)
-    for i,v in ipairs(tbl) do
-        if v == val then return i end
-    end
-    return nil
-end
-
--- Theme / style variables (centralized for easier tweaks)
-local THEME = {
-    Background = Color3.fromRGB(20,20,24),
-    Window = Color3.fromRGB(28,28,30),
-    Panel = Color3.fromRGB(30,30,34),
-    Accent = Color3.fromRGB(75,145,255),
-    AccentMuted = Color3.fromRGB(70,110,210),
-    Button = Color3.fromRGB(36,36,40),
-    ButtonHover = Color3.fromRGB(56,56,60),
-    Text = Color3.fromRGB(235,240,255),
-    MutedText = Color3.fromRGB(150,160,180),
-    Corner = 8,
-}
 
 -- Create ScreenGui
 local screen = Instance.new("ScreenGui")
@@ -60,134 +37,56 @@ end
 local function tween(obj, props, t)
     TweenService:Create(obj, TweenInfo.new(t or 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
 end
-local function makeButton(parent, text, size, pos, callback, accent)
-    local effectiveParent = parent
-    -- if parent contains a CommandsGrid container, place buttons there for responsive layout
-    if parent and parent:FindFirstChild("CommandsGrid") then
-        effectiveParent = parent.CommandsGrid
-    end
-    local btn = Instance.new("TextButton")
-    btn.Parent = effectiveParent
+local function makeButton(parent, text, size, pos, callback)
+    local btn = Instance.new("TextButton", parent)
     btn.Size = size
-    -- avoid automatic color adjustments
     btn.Position = pos
-    btn.BackgroundColor3 = accent or THEME.Button
-    btn.TextColor3 = THEME.Text
+    btn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
     btn.Font = Enum.Font.Code
     btn.TextSize = 14
     btn.Text = text
-    btn.AutoButtonColor = false
-    makeUICorner(btn, math.max(4, THEME.Corner - 2))
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Color = Color3.fromRGB(6,6,8)
-    stroke.Transparency = 0.6
-    stroke.LineJoinMode = Enum.LineJoinMode.Round
-    -- hover/leave tweens (color and slight text-size change)
-    btn.MouseEnter:Connect(function()
-        pcall(function()
-            TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = THEME.ButtonHover}):Play()
-            TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextSize = 15}):Play()
-        end)
-    end)
-    btn.MouseLeave:Connect(function()
-        pcall(function()
-            TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = accent or THEME.Button}):Play()
-            TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextSize = 14}):Play()
-        end)
-    end)
-    -- press feedback: quick color flash to accent muted
-    btn.MouseButton1Down:Connect(function()
-        pcall(function()
-            TweenService:Create(btn, TweenInfo.new(0.06, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {BackgroundColor3 = THEME.AccentMuted}):Play()
-        end)
-    end)
-    btn.MouseButton1Up:Connect(function()
-        pcall(function()
-            TweenService:Create(btn, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = accent or THEME.Button}):Play()
-        end)
-    end)
+    makeUICorner(btn, 6)
+    btn.MouseEnter:Connect(function() tween(btn, {BackgroundColor3 = Color3.fromRGB(65,65,65)}) end)
+    btn.MouseLeave:Connect(function() tween(btn, {BackgroundColor3 = Color3.fromRGB(45,45,45)}) end)
     btn.MouseButton1Click:Connect(function() pcall(callback, btn) end)
     return btn
 end
 
--- Settings persistence and global settings
-local CommandsGridLayout = nil -- will be set when Commands UI is created
-local SETTINGS = {
-    compact = false,
-}
-
-local function saveSettings()
-    if writefile and HttpService then
-        local ok, err = pcall(function()
-            writefile("ZukaHubSettings.json", HttpService:JSONEncode(SETTINGS))
-        end)
-        return ok, err
-    else
-        return false, "writefile or HttpService not available"
-    end
-end
-
-local function loadSettings()
-    if isfile and readfile and HttpService and isfile("ZukaHubSettings.json") then
-        local ok, content = pcall(readfile, "ZukaHubSettings.json")
-        if ok and content then
-            local ok2, decoded = pcall(HttpService.JSONDecode, HttpService, content)
-            if ok2 and type(decoded) == "table" then
-                for k,v in pairs(decoded) do SETTINGS[k] = v end
-                return true
-            end
-        end
-    end
-    return false
-end
-
 -- Main window
 local MainFrame = Instance.new("Frame", screen)
-MainFrame.Size = UDim2.new(0, 760, 0, 440)
-MainFrame.Position = UDim2.new(0.5, -380, 0.5, -220)
-MainFrame.BackgroundColor3 = THEME.Window
-MainFrame.BackgroundTransparency = 0
+MainFrame.Size = UDim2.new(0, 740, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -370, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+MainFrame.BackgroundTransparency = 0.13
 MainFrame.BorderSizePixel = 0
-makeUICorner(MainFrame, THEME.Corner)
-local mainStroke = Instance.new("UIStroke", MainFrame)
-mainStroke.Color = Color3.fromRGB(10,10,12)
-mainStroke.Transparency = 0.6
+makeUICorner(MainFrame, 10)
 
 -- Titlebar
 local TitleBar = Instance.new("Frame", MainFrame)
-TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.Size = UDim2.new(1, 0, 0, 36)
 TitleBar.Position = UDim2.new(0, 0, 0, 0)
-TitleBar.BackgroundColor3 = THEME.Panel
-TitleBar.BackgroundTransparency = 0
-makeUICorner(TitleBar, THEME.Corner)
-local titleStroke = Instance.new("UIStroke", TitleBar)
-titleStroke.Color = Color3.fromRGB(8,8,10)
-titleStroke.Transparency = 0.7
+TitleBar.BackgroundColor3 = Color3.fromRGB(35,35,35)
+TitleBar.BackgroundTransparency = 0.16
+makeUICorner(TitleBar, 10)
 
 local TitleLabel = Instance.new("TextLabel", TitleBar)
-TitleLabel.Size = UDim2.new(1, -180, 1, 0)
-TitleLabel.Position = UDim2.new(0, 44, 0, 0)
+TitleLabel.Size = UDim2.new(1, -160, 1, 0)
+TitleLabel.Position = UDim2.new(0, 12, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "ZukaTech v13.3.7"
 TitleLabel.Font = Enum.Font.Code
 TitleLabel.TextSize = 16
-TitleLabel.TextColor3 = THEME.Text
+TitleLabel.TextColor3 = Color3.fromRGB(255,255,255)
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Title icon
-local TitleIcon = Instance.new("ImageLabel", TitleBar)
-TitleIcon.Size = UDim2.new(0,28,0,28)
-TitleIcon.Position = UDim2.new(0, 8, 0, 6)
-TitleIcon.BackgroundTransparency = 1
-TitleIcon.Image = "rbxassetid://7072711062" -- small icon
-
-local CloseBtn = makeButton(TitleBar, "Close", UDim2.new(0,70,0,28), UDim2.new(1, -86, 0, 6), function()
+local CloseBtn = makeButton(TitleBar, "Close", UDim2.new(0,70,0,24), UDim2.new(1, -80, 0, 6), function()
     if getgenv().ZukaLuaHub then
         pcall(function() getgenv().ZukaLuaHub:Destroy() end)
         getgenv().ZukaLuaHub = nil
     end
 end)
-local MinBtn = makeButton(TitleBar, "-", UDim2.new(0,34,0,28), UDim2.new(1, -136, 0, 6), nil)
+local MinBtn = makeButton(TitleBar, "–", UDim2.new(0,30,0,24), UDim2.new(1, -120, 0, 6), nil)
 
 -- Manual dragging (robust)
 do
@@ -215,31 +114,15 @@ end
 
 -- Tabs area + pages
 local TabsColumn = Instance.new("Frame", MainFrame)
-TabsColumn.Size = UDim2.new(0, 140, 1, -48)
-TabsColumn.Position = UDim2.new(0, 8, 0, 44)
-TabsColumn.BackgroundColor3 = THEME.Panel
-TabsColumn.BackgroundTransparency = 0
-TabsColumn.BorderSizePixel = 0
-makeUICorner(TabsColumn, THEME.Corner)
-local tabsLayout = Instance.new("UIListLayout", TabsColumn)
-tabsLayout.Padding = UDim.new(0, 8)
-tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-
--- tab indicator
-local tabIndicator = Instance.new("Frame", TabsColumn)
-tabIndicator.Size = UDim2.new(1, -12, 0, 4)
-tabIndicator.Position = UDim2.new(0, 6, 0, 6)
-tabIndicator.BackgroundColor3 = THEME.Accent
-tabIndicator.BorderSizePixel = 0
-tabIndicator.AnchorPoint = Vector2.new(0,0)
-makeUICorner(tabIndicator, 4)
-tabIndicator.Visible = false
+TabsColumn.Size = UDim2.new(0, 120, 1, -36)
+TabsColumn.Position = UDim2.new(0, 0, 0, 36)
+TabsColumn.BackgroundColor3 = Color3.fromRGB(28,28,28)
+TabsColumn.BackgroundTransparency = 0.18
+makeUICorner(TabsColumn, 8)
 
 local PagesArea = Instance.new("Frame", MainFrame)
-PagesArea.Size = UDim2.new(1, -164, 1, -48)
-PagesArea.Position = UDim2.new(0, 156, 0, 44)
+PagesArea.Size = UDim2.new(1, -120, 1, -36)
+PagesArea.Position = UDim2.new(0, 120, 0, 36)
 PagesArea.BackgroundTransparency = 1
 
 local pages = {}
@@ -266,54 +149,29 @@ end
 local function switchPage(name)
     for k,v in pairs(pages) do v.Visible = (k == name) end
     -- highlight active tab
-    local activeBtn
     for _, child in pairs(TabsColumn:GetChildren()) do
-        if child:IsA("TextButton") then
-            child.BackgroundColor3 = THEME.Button
-            child.TextColor3 = THEME.Text
-            if child.Name == (name .. "_Tab") then activeBtn = child end
-        end
+        if child:IsA("TextButton") then child.BackgroundColor3 = Color3.fromRGB(45,45,45) end
     end
-    if activeBtn then
-    activeBtn.BackgroundColor3 = THEME.AccentMuted
-    activeBtn.TextColor3 = THEME.Text
-        -- animate indicator under the active button
-    tabIndicator.Visible = true
-    -- compute absolute offsets relative to TabsColumn
-    local aPos = activeBtn.AbsolutePosition
-    local aSize = activeBtn.AbsoluteSize
-    local parentPos = TabsColumn.AbsolutePosition
-    local xOffset = aPos.X - parentPos.X + 6
-    local yOffset = aPos.Y - parentPos.Y + aSize.Y + 6
-    local newPos = UDim2.new(0, xOffset, 0, yOffset)
-    local newSize = UDim2.new(0, math.max(8, aSize.X - 12), 0, tabIndicator.Size.Y.Offset)
-    TweenService:Create(tabIndicator, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = newPos, Size = newSize}):Play()
-    else
-        tabIndicator.Visible = false
-    end
+    local tabBtn = TabsColumn:FindFirstChild(name .. "_Tab")
+    if tabBtn then tabBtn.BackgroundColor3 = Color3.fromRGB(80,80,80) end
 end
 
 local function makeTab(name, y)
-    local order = (#TabsColumn:GetChildren())
-    local btn = makeButton(TabsColumn, name, UDim2.new(1, -16, 0, 40), UDim2.new(0, 8, 0, 0), function() switchPage(name) end)
+    local btn = makeButton(TabsColumn, name, UDim2.new(1, -16, 0, 44), UDim2.new(0, 8, 0, y), function() switchPage(name) end)
     btn.Name = name .. "_Tab"
-    btn.LayoutOrder = order
-    btn.AutoButtonColor = false
-    btn.TextSize = 15
     return btn
 end
 
 
 
 
-    makeTab("Editor")
-    makeTab("Commands")
-    makeTab("Special")
-    makeTab("Info")
-    makeTab("Aimbot")
-    makeTab("Rage Bot")
-    makeTab("Zuka Bot")
-    makeTab("Settings")
+    makeTab("Editor", 12)
+    makeTab("Commands", 12 + 44 + 6)
+    makeTab("Special", 12 + 2 * (44 + 6))
+    makeTab("Info", 12 + 3 * (44 + 6))
+    makeTab("Aimbot", 12 + 4 * (44 + 6))
+    makeTab("Rage Bot", 12 + 5 * (44 + 6))
+    makeTab("Zuka Bot", 12 + 6 * (44 + 6))
     switchPage("Editor")
 -- ========== Zuka Bot Page ========== 
 do
@@ -323,7 +181,7 @@ do
     title.Size = UDim2.new(1, -20, 0, 36)
     title.Position = UDim2.new(0, 10, 0, 10)
     title.BackgroundTransparency = 1
-    title.TextColor3 = THEME.Accent
+    title.TextColor3 = Color3.fromRGB(120,200,255)
     title.Font = Enum.Font.Code
     title.TextSize = 22
     title.Text = "Zuka Bot (Auto Follow)"
@@ -334,7 +192,7 @@ do
     desc.Size = UDim2.new(1, -20, 0, 22)
     desc.Position = UDim2.new(0, 10, 0, 50)
     desc.BackgroundTransparency = 1
-    desc.TextColor3 = THEME.MutedText
+    desc.TextColor3 = Color3.fromRGB(180,220,255)
     desc.Font = Enum.Font.Code
     desc.TextSize = 15
     desc.Text = "Automatically follows the user 'OverZuka' if they are in the game."
@@ -344,8 +202,8 @@ do
     local followToggle = Instance.new("TextButton", page)
     followToggle.Size = UDim2.new(0, 160, 0, 32)
     followToggle.Position = UDim2.new(0, 20, 0, 90)
-    followToggle.BackgroundColor3 = THEME.Button
-    followToggle.TextColor3 = THEME.Text
+    followToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    followToggle.TextColor3 = Color3.fromRGB(255,255,255)
     followToggle.Font = Enum.Font.Code
     followToggle.TextSize = 16
     followToggle.Text = "Auto Follow: OFF"
@@ -356,8 +214,8 @@ do
     teleportBtn.Size = UDim2.new(0, 160, 0, 32)
     teleportBtn.Position = UDim2.new(1, -180, 0, 90)
     teleportBtn.AnchorPoint = Vector2.new(0, 0)
-    teleportBtn.BackgroundColor3 = THEME.Accent
-    teleportBtn.TextColor3 = THEME.Text
+    teleportBtn.BackgroundColor3 = Color3.fromRGB(60,120,200)
+    teleportBtn.TextColor3 = Color3.fromRGB(255,255,255)
     teleportBtn.Font = Enum.Font.Code
     teleportBtn.TextSize = 16
     teleportBtn.Text = "Teleport to OverZuka"
@@ -383,7 +241,7 @@ do
         followToggle.Text = "Auto Follow: " .. (followEnabled and "ON" or "OFF")
     end)
 
-    local followDist = 5.5 -- Increased to keep a comfortable gap
+    local followDist = 7.5 -- Increased to keep a comfortable gap
     RunService.RenderStepped:Connect(function()
         if followEnabled then
             local target = Players:FindFirstChild("OverZuka")
@@ -407,127 +265,7 @@ do
             end
         end
     end)
-    -- Extra loadstring buttons
-    local lsBtn1 = makeButton(page, "Load: Fling V.1", UDim2.new(0,160,0,32), UDim2.new(1, -340, 0, 130), function()
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/miso517/scirpt/refs/heads/main/main.lua"))();
-        end)
-        if ok then
-            notify("Zuka Bot", "Fling V.1 loaded", 2)
-        else
-            notify("Zuka Bot", "Failed to load: " .. tostring(err), 4)
-        end
-    end)
-
-    local lsBtn2 = makeButton(page, "Load: Reach", UDim2.new(0,160,0,32), UDim2.new(1, -340, 0, 170), function()
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Anaszaxo555/Y/refs/heads/main/Y"))();
-        end)
-        if ok then
-            notify("Zuka Bot", "Reach Y loaded", 2)
-        else
-            notify("Zuka Bot", "Failed to load: " .. tostring(err), 4)
-        end
-    end)
-
-    local lsBtn3 = makeButton(page, "Load: Shit-talking AI", UDim2.new(0,160,0,32), UDim2.new(1, -340, 0, 210), function()
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/theogcheater2020-pixel/luaprojects2/refs/heads/main/chat.lua"))();
-        end)
-        if ok then
-            notify("Zuka Bot", "Best AI loaded", 2)
-        else
-            notify("Zuka Bot", "Failed to load: " .. tostring(err), 4)
-        end
-    end)
 end
-
--- Compact mode: adjust sizes/fonts/layouts
-local function applyCompactMode(enabled)
-    SETTINGS.compact = enabled and true or false
-    if enabled then
-        MainFrame.Size = UDim2.new(0, 520, 0, 300)
-        MainFrame.Position = UDim2.new(0.5, -260, 0.5, -150)
-        THEME.Corner = 6
-        if CommandsGridLayout then
-            CommandsGridLayout.CellSize = UDim2.new(0, 140, 0, 34)
-            CommandsGridLayout.CellPadding = UDim2.new(0,6,0,6)
-        end
-        -- shrink fonts slightly
-        TitleLabel.TextSize = 14
-    else
-        MainFrame.Size = UDim2.new(0, 760, 0, 440)
-        MainFrame.Position = UDim2.new(0.5, -380, 0.5, -220)
-        THEME.Corner = 8
-        if CommandsGridLayout then
-            CommandsGridLayout.CellSize = UDim2.new(0, 160, 0, 40)
-            CommandsGridLayout.CellPadding = UDim2.new(0,8,0,8)
-        end
-        TitleLabel.TextSize = 16
-    end
-    -- update corners for main frame and relevant children
-    makeUICorner(MainFrame, THEME.Corner)
-    makeUICorner(TitleBar, THEME.Corner)
-    makeUICorner(TabsColumn, THEME.Corner)
-end
-
--- Create Settings page UI
-do
-    local SettingsPage = createPage("Settings")
-    local page = SettingsPage
-    local title = Instance.new("TextLabel", page)
-    title.Size = UDim2.new(1, -20, 0, 36)
-    title.Position = UDim2.new(0, 10, 0, 10)
-    title.BackgroundTransparency = 1
-    title.TextColor3 = THEME.Accent
-    title.Font = Enum.Font.Code
-    title.TextSize = 20
-    title.Text = "Settings"
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.TextYAlignment = Enum.TextYAlignment.Center
-
-    local compactLabel = Instance.new("TextLabel", page)
-    compactLabel.Size = UDim2.new(0, 160, 0, 22)
-    compactLabel.Position = UDim2.new(0, 20, 0, 60)
-    compactLabel.BackgroundTransparency = 1
-    compactLabel.Text = "Compact Mode:"
-    compactLabel.TextColor3 = THEME.MutedText
-    compactLabel.Font = Enum.Font.Code
-    compactLabel.TextSize = 15
-    compactLabel.TextXAlignment = Enum.TextXAlignment.Left
-    compactLabel.TextYAlignment = Enum.TextYAlignment.Center
-
-    local compactToggle = Instance.new("TextButton", page)
-    compactToggle.Size = UDim2.new(0, 120, 0, 28)
-    compactToggle.Position = UDim2.new(0, 200, 0, 58)
-    compactToggle.BackgroundColor3 = THEME.Button
-    compactToggle.TextColor3 = THEME.Text
-    compactToggle.Font = Enum.Font.Code
-    compactToggle.TextSize = 14
-    compactToggle.Text = SETTINGS.compact and "ON" or "OFF"
-    makeUICorner(compactToggle, 6)
-    compactToggle.MouseButton1Click:Connect(function()
-        SETTINGS.compact = not SETTINGS.compact
-        compactToggle.Text = SETTINGS.compact and "ON" or "OFF"
-        applyCompactMode(SETTINGS.compact)
-    end)
-
-    local saveBtn = makeButton(page, "Save Settings", UDim2.new(0, 140, 0, 32), UDim2.new(0, 20, 0, 110), function()
-        local ok, err = saveSettings()
-        if ok then notify("Settings", "Saved settings.", 2) else notify("Settings", "Save failed: " .. tostring(err), 4) end
-    end)
-
-    local resetBtn = makeButton(page, "Reset to Default", UDim2.new(0, 140, 0, 32), UDim2.new(0, 180, 0, 110), function()
-        SETTINGS = { compact = false }
-        compactToggle.Text = "OFF"
-        applyCompactMode(false)
-        notify("Settings", "Reset to defaults.", 2)
-    end)
-end
-
--- Load settings on startup and apply
-pcall(loadSettings)
-applyCompactMode(SETTINGS.compact)
 
 -- ========== Rage Bot Page ========== 
 do
@@ -537,7 +275,7 @@ do
     title.Size = UDim2.new(1, -20, 0, 36)
     title.Position = UDim2.new(0, 10, 0, 10)
     title.BackgroundTransparency = 1
-    title.TextColor3 = Color3.fromRGB(255,90,90)
+    title.TextColor3 = Color3.fromRGB(255,80,80)
     title.Font = Enum.Font.Code
     title.TextSize = 22
     title.Text = "Rage Bot (PvP Autofarm)"
@@ -548,7 +286,7 @@ do
     desc.Size = UDim2.new(1, -20, 0, 22)
     desc.Position = UDim2.new(0, 10, 0, 50)
     desc.BackgroundTransparency = 1
-    desc.TextColor3 = THEME.MutedText
+    desc.TextColor3 = Color3.fromRGB(220,180,180)
     desc.Font = Enum.Font.Code
     desc.TextSize = 15
     desc.Text = "Automatically hovers behind and attacks selected players."
@@ -561,7 +299,7 @@ do
     playerListLabel.Position = UDim2.new(0, 20, 0, 90)
     playerListLabel.BackgroundTransparency = 1
     playerListLabel.Text = "Player List:"
-    playerListLabel.TextColor3 = THEME.MutedText
+    playerListLabel.TextColor3 = Color3.fromRGB(255,180,180)
     playerListLabel.Font = Enum.Font.Code
     playerListLabel.TextSize = 15
     playerListLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -570,38 +308,80 @@ do
     local playerDropdown = Instance.new("TextButton", page)
     playerDropdown.Size = UDim2.new(0, 180, 0, 28)
     playerDropdown.Position = UDim2.new(0, 140, 0, 90)
-    playerDropdown.BackgroundColor3 = THEME.Button
-    playerDropdown.TextColor3 = THEME.Text
+    playerDropdown.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    playerDropdown.TextColor3 = Color3.fromRGB(255,255,255)
     playerDropdown.Font = Enum.Font.Code
     playerDropdown.TextSize = 15
     playerDropdown.Text = "Select Player"
     makeUICorner(playerDropdown, 6)
 
+    local autoCycleToggle = Instance.new("TextButton", page)
+    autoCycleToggle.Size = UDim2.new(0, 160, 0, 28)
+    autoCycleToggle.Position = UDim2.new(0, 340, 0, 90)
+    autoCycleToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    autoCycleToggle.TextColor3 = Color3.fromRGB(255,255,255)
+    autoCycleToggle.Font = Enum.Font.Code
+    autoCycleToggle.TextSize = 15
+    autoCycleToggle.Text = "Auto Cycle: OFF"
+    makeUICorner(autoCycleToggle, 6)
+
     local selectedPlayer = nil
+    local playerNames = {}
+    local playerIdx = 1
+    local autoCycleEnabled = false
+
     local function refreshPlayerList()
-        local names = {}
+        playerNames = {}
         for _,plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer then table.insert(names, plr.Name) end
+            if plr ~= LocalPlayer then table.insert(playerNames, plr.Name) end
         end
-        playerDropdown.Text = #names > 0 and ("Select Player: "..names[1]) or "No Players"
-        selectedPlayer = #names > 0 and Players:FindFirstChild(names[1]) or nil
-        playerDropdown.MouseButton1Click:Connect(function()
-            local idx = tableFind(names, selectedPlayer and selectedPlayer.Name or "") or 1
-            idx = idx + 1; if idx > #names then idx = 1 end
-            selectedPlayer = Players:FindFirstChild(names[idx])
-            playerDropdown.Text = selectedPlayer and ("Select Player: "..selectedPlayer.Name) or "No Players"
-        end)
+        if #playerNames > 0 then
+            playerIdx = math.clamp(playerIdx, 1, #playerNames)
+            selectedPlayer = Players:FindFirstChild(playerNames[playerIdx])
+            playerDropdown.Text = "Select Player: " .. selectedPlayer.Name
+        else
+            selectedPlayer = nil
+            playerDropdown.Text = "No Players"
+        end
     end
+
+    playerDropdown.MouseButton1Click:Connect(function()
+        if #playerNames > 0 then
+            playerIdx = playerIdx + 1
+            if playerIdx > #playerNames then playerIdx = 1 end
+            selectedPlayer = Players:FindFirstChild(playerNames[playerIdx])
+            playerDropdown.Text = "Select Player: " .. selectedPlayer.Name
+        end
+    end)
+
+    autoCycleToggle.MouseButton1Click:Connect(function()
+        autoCycleEnabled = not autoCycleEnabled
+        autoCycleToggle.Text = "Auto Cycle: " .. (autoCycleEnabled and "ON" or "OFF")
+    end)
+
     refreshPlayerList()
     Players.PlayerAdded:Connect(refreshPlayerList)
     Players.PlayerRemoving:Connect(refreshPlayerList)
+
+    -- Auto cycle logic
+    spawn(function()
+        while true do
+            wait(3) -- Change interval as needed
+            if autoCycleEnabled and #playerNames > 1 then
+                playerIdx = playerIdx + 1
+                if playerIdx > #playerNames then playerIdx = 1 end
+                selectedPlayer = Players:FindFirstChild(playerNames[playerIdx])
+                playerDropdown.Text = "Select Player: " .. selectedPlayer.Name
+            end
+        end
+    end)
 
     -- Rage Bot toggles
     local rageToggle = Instance.new("TextButton", page)
     rageToggle.Size = UDim2.new(0, 160, 0, 32)
     rageToggle.Position = UDim2.new(0, 20, 0, 130)
-    rageToggle.BackgroundColor3 = THEME.Button
-    rageToggle.TextColor3 = THEME.Text
+    rageToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    rageToggle.TextColor3 = Color3.fromRGB(255,255,255)
     rageToggle.Font = Enum.Font.Code
     rageToggle.TextSize = 16
     rageToggle.Text = "Rage Bot: OFF"
@@ -619,7 +399,7 @@ do
     hoverLabel.Position = UDim2.new(0, 20, 0, 170)
     hoverLabel.BackgroundTransparency = 1
     hoverLabel.Text = "Hover Distance:"
-    hoverLabel.TextColor3 = THEME.MutedText
+    hoverLabel.TextColor3 = Color3.fromRGB(255,180,180)
     hoverLabel.Font = Enum.Font.Code
     hoverLabel.TextSize = 15
     hoverLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -628,8 +408,8 @@ do
     local hoverBox = Instance.new("TextBox", page)
     hoverBox.Size = UDim2.new(0, 80, 0, 22)
     hoverBox.Position = UDim2.new(0, 140, 0, 170)
-    hoverBox.BackgroundColor3 = THEME.Button
-    hoverBox.TextColor3 = THEME.Text
+    hoverBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    hoverBox.TextColor3 = Color3.fromRGB(255,255,255)
     hoverBox.Font = Enum.Font.Code
     hoverBox.TextSize = 15
     hoverBox.Text = "6"
@@ -646,122 +426,6 @@ do
         end
     end)
 
-    -- Auto-cycle UI: cycles through players automatically
-    local autoCycleToggle = Instance.new("TextButton", page)
-    autoCycleToggle.Size = UDim2.new(0, 180, 0, 28)
-    autoCycleToggle.Position = UDim2.new(0, 20, 0, 200)
-    autoCycleToggle.BackgroundColor3 = THEME.Button
-    autoCycleToggle.TextColor3 = THEME.Text
-    autoCycleToggle.Font = Enum.Font.Code
-    autoCycleToggle.TextSize = 15
-    autoCycleToggle.Text = "Auto Cycle: OFF"
-    makeUICorner(autoCycleToggle, 6)
-
-    local ignoreForceToggle = Instance.new("TextButton", page)
-    ignoreForceToggle.Size = UDim2.new(0, 240, 0, 28)
-    ignoreForceToggle.Position = UDim2.new(0, 220, 0, 200)
-    ignoreForceToggle.BackgroundColor3 = THEME.Button
-    ignoreForceToggle.TextColor3 = THEME.Text
-    ignoreForceToggle.Font = Enum.Font.Code
-    ignoreForceToggle.TextSize = 15
-    ignoreForceToggle.Text = "Ignore players with spawn force field: OFF"
-    makeUICorner(ignoreForceToggle, 6)
-
-    local intervalLabel = Instance.new("TextLabel", page)
-    intervalLabel.Size = UDim2.new(0, 120, 0, 22)
-    intervalLabel.Position = UDim2.new(0, 20, 0, 236)
-    intervalLabel.BackgroundTransparency = 1
-    intervalLabel.Text = "Cycle Interval (s):"
-    intervalLabel.TextColor3 = THEME.MutedText
-    intervalLabel.Font = Enum.Font.Code
-    intervalLabel.TextSize = 15
-    intervalLabel.TextXAlignment = Enum.TextXAlignment.Left
-    intervalLabel.TextYAlignment = Enum.TextYAlignment.Center
-
-    local intervalBox = Instance.new("TextBox", page)
-    intervalBox.Size = UDim2.new(0, 80, 0, 22)
-    intervalBox.Position = UDim2.new(0, 140, 0, 236)
-    intervalBox.BackgroundColor3 = THEME.Button
-    intervalBox.TextColor3 = THEME.Text
-    intervalBox.Font = Enum.Font.Code
-    intervalBox.TextSize = 15
-    intervalBox.Text = "4"
-    intervalBox.PlaceholderText = "Seconds"
-    makeUICorner(intervalBox, 6)
-
-    local autoCycleEnabled = false
-    local ignoreSpawnForce = false
-    local cycleInterval = 4
-
-    autoCycleToggle.MouseButton1Click:Connect(function()
-        autoCycleEnabled = not autoCycleEnabled
-        autoCycleToggle.Text = "Auto Cycle: " .. (autoCycleEnabled and "ON" or "OFF")
-    end)
-
-    ignoreForceToggle.MouseButton1Click:Connect(function()
-        ignoreSpawnForce = not ignoreSpawnForce
-        ignoreForceToggle.Text = "Ignore players with spawn force field: " .. (ignoreSpawnForce and "ON" or "OFF")
-    end)
-
-    intervalBox.FocusLost:Connect(function()
-        local v = tonumber(intervalBox.Text)
-        if v and v >= 0.5 and v <= 60 then
-            cycleInterval = v
-            intervalBox.Text = tostring(cycleInterval)
-        else
-            intervalBox.Text = tostring(cycleInterval)
-        end
-    end)
-
-    -- Force-object classes to detect spawn force fields
-    local spawnForceClasses = {"BodyVelocity","BodyForce","BodyGyro","BodyAngularVelocity","VectorForce","AlignPosition","AlignOrientation","LinearVelocity","AngularVelocity"}
-
-    local function playerHasSpawnForce(plr)
-        if not plr or not plr.Character then return false end
-        for _, obj in ipairs(plr.Character:GetDescendants()) do
-            if tableFind(spawnForceClasses, obj.ClassName) then
-                return true
-            end
-        end
-        return false
-    end
-
-    -- Cycling state
-    local cycleElapsed = 0
-    RunService.Heartbeat:Connect(function(dt)
-        if not autoCycleEnabled then return end
-        cycleElapsed = cycleElapsed + dt
-        if cycleElapsed < cycleInterval then return end
-        cycleElapsed = 0
-        -- build list of valid players
-        local players = Players:GetPlayers()
-        if #players <= 1 then return end
-        -- find index of current selectedPlayer in players list
-        local startIdx = 1
-        for i, plr in ipairs(players) do
-            if selectedPlayer and plr == selectedPlayer then startIdx = i break end
-        end
-        -- iterate to next valid player
-        local found = nil
-        local idx = startIdx
-        for i = 1, #players - 1 do
-            idx = idx + 1
-            if idx > #players then idx = 1 end
-            local cand = players[idx]
-            if cand ~= LocalPlayer then
-                if ignoreSpawnForce then
-                    if not playerHasSpawnForce(cand) then found = cand break end
-                else
-                    found = cand break
-                end
-            end
-        end
-        if found then
-            selectedPlayer = found
-            playerDropdown.Text = selectedPlayer and ("Select Player: "..selectedPlayer.Name) or "Select Player"
-        end
-    end)
-
     -- Rage Bot logic
     RunService.RenderStepped:Connect(function()
         if rageEnabled and selectedPlayer and selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -769,17 +433,25 @@ do
             if myChar and myChar:FindFirstChild("HumanoidRootPart") and myChar:FindFirstChild("Humanoid") and myChar.Humanoid.Health > 0 then
                 local targetHRP = selectedPlayer.Character.HumanoidRootPart
                 local myHRP = myChar.HumanoidRootPart
-                -- Position behind target
+                -- Position directly behind target (no hovering)
                 local backVec = -targetHRP.CFrame.LookVector * hoverDist
-                myHRP.CFrame = CFrame.new(targetHRP.Position + backVec, targetHRP.Position)
-                -- Auto-aim (face target)
-                myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
-                -- Auto-attack (simulate click)
-                local tool = myChar:FindFirstChildOfClass("Tool")
-                if tool and tool:FindFirstChild("Handle") then
-                    pcall(function()
-                        tool:Activate()
-                    end)
+                local behindPos = targetHRP.Position + backVec
+                myHRP.CFrame = CFrame.new(behindPos, targetHRP.Position)
+                -- Reliable aimlock: always face target
+                myHRP.CFrame = CFrame.lookAt(myHRP.Position, targetHRP.Position)
+
+                -- Attack cooldown to prevent bugs
+                if not page._lastAttack or tick() - page._lastAttack > 0.05 then -- ~20 attacks/sec
+                    page._lastAttack = tick()
+                    local tool = myChar:FindFirstChildOfClass("Tool")
+                    if tool and tool:FindFirstChild("Handle") then
+                        pcall(function()
+                            -- Simulate holding down attack or spam clicking
+                            tool:Activate()
+                            wait(0.01)
+                            tool:Deactivate()
+                        end)
+                    end
                 end
             end
         end
@@ -793,7 +465,7 @@ do
     title.Size = UDim2.new(1, -20, 0, 36)
     title.Position = UDim2.new(0, 10, 0, 10)
     title.BackgroundTransparency = 1
-    title.TextColor3 = THEME.Accent
+    title.TextColor3 = Color3.fromRGB(200,220,255)
     title.Font = Enum.Font.Code
     title.TextSize = 22
     title.Text = "Aimbot Settings"
@@ -804,7 +476,7 @@ do
     desc.Size = UDim2.new(1, -20, 0, 22)
     desc.Position = UDim2.new(0, 10, 0, 50)
     desc.BackgroundTransparency = 1
-    desc.TextColor3 = THEME.MutedText
+    desc.TextColor3 = Color3.fromRGB(180,180,200)
     desc.Font = Enum.Font.Code
     desc.TextSize = 15
     desc.Text = "Configure aimbot toggle and aim part."
@@ -817,7 +489,7 @@ do
     toggleKeyLabel.Position = UDim2.new(0, 20, 0, 90)
     toggleKeyLabel.BackgroundTransparency = 1
     toggleKeyLabel.Text = "Toggle Key:"
-    toggleKeyLabel.TextColor3 = THEME.MutedText
+    toggleKeyLabel.TextColor3 = Color3.fromRGB(180,220,255)
     toggleKeyLabel.Font = Enum.Font.Code
     toggleKeyLabel.TextSize = 15
     toggleKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -826,8 +498,8 @@ do
     local toggleKeyBox = Instance.new("TextBox", page)
     toggleKeyBox.Size = UDim2.new(0, 80, 0, 22)
     toggleKeyBox.Position = UDim2.new(0, 140, 0, 90)
-    toggleKeyBox.BackgroundColor3 = THEME.Button
-    toggleKeyBox.TextColor3 = THEME.Text
+    toggleKeyBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    toggleKeyBox.TextColor3 = Color3.fromRGB(255,255,255)
     toggleKeyBox.Font = Enum.Font.Code
     toggleKeyBox.TextSize = 15
     toggleKeyBox.Text = "MouseButton3"
@@ -840,7 +512,7 @@ do
     partLabel.Position = UDim2.new(0, 20, 0, 130)
     partLabel.BackgroundTransparency = 1
     partLabel.Text = "Aim Part:"
-    partLabel.TextColor3 = THEME.MutedText
+    partLabel.TextColor3 = Color3.fromRGB(180,220,255)
     partLabel.Font = Enum.Font.Code
     partLabel.TextSize = 15
     partLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -849,8 +521,8 @@ do
     local partDropdown = Instance.new("TextButton", page)
     partDropdown.Size = UDim2.new(0, 120, 0, 22)
     partDropdown.Position = UDim2.new(0, 140, 0, 130)
-    partDropdown.BackgroundColor3 = THEME.Button
-    partDropdown.TextColor3 = THEME.Text
+    partDropdown.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    partDropdown.TextColor3 = Color3.fromRGB(255,255,255)
     partDropdown.Font = Enum.Font.Code
     partDropdown.TextSize = 15
     partDropdown.Text = "Head"
@@ -870,15 +542,15 @@ do
         dropdownFrame = Instance.new("Frame", page)
         dropdownFrame.Size = UDim2.new(0, 120, 0, #parts * 22)
         dropdownFrame.Position = UDim2.new(0, 140, 0, 152)
-    dropdownFrame.BackgroundColor3 = THEME.Panel
+        dropdownFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
         dropdownFrame.BorderSizePixel = 0
         makeUICorner(dropdownFrame, 6)
         for i, part in ipairs(parts) do
             local btn = Instance.new("TextButton", dropdownFrame)
             btn.Size = UDim2.new(1, 0, 0, 22)
             btn.Position = UDim2.new(0, 0, 0, (i-1)*22)
-            btn.BackgroundColor3 = THEME.Button
-            btn.TextColor3 = THEME.Text
+            btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+            btn.TextColor3 = Color3.fromRGB(255,255,255)
             btn.Font = Enum.Font.Code
             btn.TextSize = 15
             btn.Text = part
@@ -897,7 +569,7 @@ do
     statusLabel.Size = UDim2.new(1, -20, 0, 22)
     statusLabel.Position = UDim2.new(0, 10, 0, 180)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.TextColor3 = THEME.MutedText
+    statusLabel.TextColor3 = Color3.fromRGB(180,220,180)
     statusLabel.Font = Enum.Font.Code
     statusLabel.TextSize = 15
     statusLabel.Text = "Aimbot ready. Hold toggle key to aim."
@@ -909,7 +581,7 @@ do
     selectLabel.Size = UDim2.new(1, -20, 0, 22)
     selectLabel.Position = UDim2.new(0, 10, 0, 210)
     selectLabel.BackgroundTransparency = 1
-    selectLabel.TextColor3 = THEME.MutedText
+    selectLabel.TextColor3 = Color3.fromRGB(220,220,180)
     selectLabel.Font = Enum.Font.Code
     selectLabel.TextSize = 15
     selectLabel.Text = "Press V to select any block/humanoid under mouse."
@@ -928,7 +600,7 @@ do
     playerListLabel.Position = UDim2.new(0, 280, 0, 90)
     playerListLabel.BackgroundTransparency = 1
     playerListLabel.Text = "Player List:"
-    playerListLabel.TextColor3 = THEME.MutedText
+    playerListLabel.TextColor3 = Color3.fromRGB(180,220,255)
     playerListLabel.Font = Enum.Font.Code
     playerListLabel.TextSize = 15
     playerListLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -937,8 +609,8 @@ do
     local playerDropdown = Instance.new("TextButton", page)
     playerDropdown.Size = UDim2.new(0, 160, 0, 22)
     playerDropdown.Position = UDim2.new(0, 400, 0, 90)
-    playerDropdown.BackgroundColor3 = THEME.Button
-    playerDropdown.TextColor3 = THEME.Text
+    playerDropdown.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    playerDropdown.TextColor3 = Color3.fromRGB(255,255,255)
     playerDropdown.Font = Enum.Font.Code
     playerDropdown.TextSize = 15
     playerDropdown.Text = "None"
@@ -953,15 +625,15 @@ do
         playerDropdownFrame = Instance.new("Frame", page)
         playerDropdownFrame.Size = UDim2.new(0, 160, 0, (#playersList) * 22)
         playerDropdownFrame.Position = UDim2.new(0, 400, 0, 112)
-    playerDropdownFrame.BackgroundColor3 = THEME.Panel
+        playerDropdownFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
         playerDropdownFrame.BorderSizePixel = 0
         makeUICorner(playerDropdownFrame, 6)
         for i, plr in ipairs(playersList) do
             local btn = Instance.new("TextButton", playerDropdownFrame)
             btn.Size = UDim2.new(1, 0, 0, 22)
             btn.Position = UDim2.new(0, 0, 0, (i-1)*22)
-            btn.BackgroundColor3 = THEME.Button
-            btn.TextColor3 = THEME.Text
+            btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+            btn.TextColor3 = Color3.fromRGB(255,255,255)
             btn.Font = Enum.Font.Code
             btn.TextSize = 15
             btn.Text = plr.Name
@@ -985,8 +657,8 @@ do
     local targetPlayerToggle = Instance.new("TextButton", page)
     targetPlayerToggle.Size = UDim2.new(0, 140, 0, 32)
     targetPlayerToggle.Position = UDim2.new(0, 280, 0, 122)
-    targetPlayerToggle.BackgroundColor3 = THEME.Button
-    targetPlayerToggle.TextColor3 = THEME.Text
+    targetPlayerToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    targetPlayerToggle.TextColor3 = Color3.fromRGB(255,255,255)
     targetPlayerToggle.Font = Enum.Font.Code
     targetPlayerToggle.TextSize = 15
     targetPlayerToggle.Text = "Target Selected: OFF"
@@ -1174,13 +846,10 @@ do
     -- Listen for toggle key
     UIS.InputBegan:Connect(function(input, processed)
         if processed then return end
-        local key = (toggleKeyBox.Text or ""):upper()
-        -- handle mouse buttons explicitly
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
-            if key:match("MOUSEBUTTON%d") then
-                if input.UserInputType == Enum.UserInputType[key:gsub("MOUSEBUTTON", "MouseButton")] then
-                    aiming = true
-                end
+        local key = toggleKeyBox.Text:upper()
+        if key == "MOUSEBUTTON3" then
+            if input.UserInputType == Enum.UserInputType.MouseButton3 then
+                aiming = true
             end
         elseif input.UserInputType == Enum.UserInputType.Keyboard then
             if input.KeyCode.Name:upper() == key then
@@ -1189,14 +858,11 @@ do
         end
     end)
     UIS.InputEnded:Connect(function(input, processed)
-        if processed then return end
-        local key = (toggleKeyBox.Text or ""):upper()
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
-            if key:match("MOUSEBUTTON%d") then
-                if input.UserInputType == Enum.UserInputType[key:gsub("MOUSEBUTTON", "MouseButton")] then
-                    aiming = false
-                    clearESP()
-                end
+        local key = toggleKeyBox.Text:upper()
+        if key == "MOUSEBUTTON3" then
+            if input.UserInputType == Enum.UserInputType.MouseButton3 then
+                aiming = false
+                clearESP()
             end
         elseif input.UserInputType == Enum.UserInputType.Keyboard then
             if input.KeyCode.Name:upper() == key then
@@ -1284,7 +950,7 @@ do
     local silentAimToggle = Instance.new("TextButton", page)
     silentAimToggle.Size = UDim2.new(0, 180, 0, 32)
     silentAimToggle.Position = UDim2.new(0, 45, 0, 250)
-    silentAimToggle.BackgroundColor3 = THEME.Button
+    silentAimToggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
     silentAimToggle.TextColor3 = Color3.fromRGB(255,255,255)
     silentAimToggle.Font = Enum.Font.Code
     silentAimToggle.TextSize = 15
@@ -1304,8 +970,8 @@ do
     local editorBack = Instance.new("Frame", EditorPage)
     editorBack.Size = UDim2.new(1, -20, 1, -20)
     editorBack.Position = UDim2.new(0, 10, 0, 10)
-    editorBack.BackgroundColor3 = THEME.Background
-    editorBack.BackgroundTransparency = 0
+    editorBack.BackgroundColor3 = Color3.fromRGB(18,18,22)
+    editorBack.BackgroundTransparency = 0.13
     editorBack.BorderSizePixel = 0
     editorBack.ClipsDescendants = true
     makeUICorner(editorBack, 10)
@@ -1322,9 +988,9 @@ do
     local gutter = Instance.new("TextLabel", editorBack)
     gutter.Size = UDim2.new(0,44,1,-60)
     gutter.Position = UDim2.new(0,0,0,0)
-    gutter.BackgroundColor3 = THEME.Panel
-    gutter.BackgroundTransparency = 0
-    gutter.TextColor3 = THEME.MutedText
+    gutter.BackgroundColor3 = Color3.fromRGB(24,24,32)
+    gutter.BackgroundTransparency = 0.08
+    gutter.TextColor3 = Color3.fromRGB(120,140,180)
     gutter.Font = Enum.Font.Code
     gutter.TextSize = 14
     gutter.TextXAlignment = Enum.TextXAlignment.Right
@@ -1347,8 +1013,8 @@ do
     scroller.Position = UDim2.new(0, 50, 0, 0)
     scroller.CanvasSize = UDim2.new(0,0,0,0)
     scroller.ScrollBarThickness = 8
-    scroller.BackgroundColor3 = THEME.Background
-    scroller.BackgroundTransparency = 0
+    scroller.BackgroundColor3 = Color3.fromRGB(22,22,28)
+    scroller.BackgroundTransparency = 0.12
     scroller.BorderSizePixel = 0
     scroller.AutomaticCanvasSize = Enum.AutomaticSize.None
     scroller.ClipsDescendants = true
@@ -1356,7 +1022,7 @@ do
 
     -- Modern scroll bar color
     pcall(function()
-    scroller.ScrollBarImageColor3 = THEME.Accent
+        scroller.ScrollBarImageColor3 = Color3.fromRGB(80,120,200)
         scroller.ScrollBarImageTransparency = 0.18
     end)
 
@@ -1369,13 +1035,13 @@ do
     textBox.TextYAlignment = Enum.TextYAlignment.Top
     textBox.Font = Enum.Font.Code
     textBox.TextSize = 15
-    textBox.TextColor3 = THEME.Text
+    textBox.TextColor3 = Color3.fromRGB(235,240,255)
     textBox.Text = "-- Write your Lua here\n"
     textBox.PlaceholderText = "Type or paste Lua code here..."
     textBox.PlaceholderColor3 = Color3.fromRGB(120,130,160)
-    textBox.BackgroundColor3 = THEME.Panel
-    textBox.BackgroundTransparency = 0
-    textBox.TextWrapped = true
+    textBox.BackgroundColor3 = Color3.fromRGB(16,16,20)
+    textBox.BackgroundTransparency = 0.18
+    textBox.TextWrapped = false
     textBox.ClipsDescendants = true
     textBox.AutomaticSize = Enum.AutomaticSize.Y
     textBox.TextTruncate = Enum.TextTruncate.None
@@ -1404,7 +1070,7 @@ do
     local bar = Instance.new("Frame", editorBack)
     bar.Size = UDim2.new(1,0,0,50)
     bar.Position = UDim2.new(0,0,1,-50)
-    bar.BackgroundColor3 = THEME.Panel
+    bar.BackgroundColor3 = Color3.fromRGB(10,10,18)
     bar.BackgroundTransparency = 0.10
     makeUICorner(bar,8)
 
@@ -1469,7 +1135,7 @@ do
     profileLabel.Size = UDim2.new(1, -20, 0, 28)
     profileLabel.Position = UDim2.new(0, 10, 0, 56)
     profileLabel.BackgroundTransparency = 1
-    profileLabel.TextColor3 = THEME.MutedText
+    profileLabel.TextColor3 = Color3.fromRGB(180,255,180)
     profileLabel.Font = Enum.Font.Code
     profileLabel.TextSize = 16
     profileLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1479,7 +1145,7 @@ do
     gameLabel.Size = UDim2.new(1, -20, 0, 24)
     gameLabel.Position = UDim2.new(0, 10, 0, 90)
     gameLabel.BackgroundTransparency = 1
-    gameLabel.TextColor3 = THEME.Text
+    gameLabel.TextColor3 = Color3.fromRGB(200,200,200)
     gameLabel.Font = Enum.Font.Code
     gameLabel.TextSize = 15
     gameLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1489,7 +1155,7 @@ do
     placeLabel.Size = UDim2.new(1, -20, 0, 24)
     placeLabel.Position = UDim2.new(0, 10, 0, 120)
     placeLabel.BackgroundTransparency = 1
-    placeLabel.TextColor3 = THEME.Text
+    placeLabel.TextColor3 = Color3.fromRGB(200,200,200)
     placeLabel.Font = Enum.Font.Code
     placeLabel.TextSize = 15
     placeLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1542,7 +1208,7 @@ do
     local scripts = {
         {name = "Chat Bypasser", url = "https://raw.githubusercontent.com/shadow62x/catbypass/main/upfix"},
         {name = "Script Searcher", url = "https://raw.githubusercontent.com/AZYsGithub/chillz-workshop/main/ScriptSearcher"},
-    {name = "Auto Click", url = "https://raw.githubusercontent.com/JustEzpi/ROBLOX-Scripts/refs/heads/main/ROBLOX_AutoClicker"},
+    {name = "AI Bot", url = "https://raw.githubusercontent.com/paulinelisenbe/luaprojects/refs/heads/main/AICHAT.lua"},
         {name = "CHedHub V1", url = "https://raw.githubusercontent.com/idcgj36/CHedHub/refs/heads/main/Hub"},
     }
 
@@ -1556,7 +1222,7 @@ do
             else
                 notify("Script Hub", "Failed: " .. tostring(err), 4)
             end
-        end, THEME.AccentMuted)
+        end)
     end
 
     -- (Removed: script buttons are now only created in scriptPanel below)
@@ -1604,7 +1270,7 @@ do
     local playerScroller = Instance.new("ScrollingFrame", playerPanel)
     playerScroller.Size = UDim2.new(1, 0, 1, -28)
     playerScroller.Position = UDim2.new(0, 0, 0, 28)
-    playerScroller.BackgroundColor3 = THEME.Panel
+    playerScroller.BackgroundColor3 = Color3.fromRGB(24,24,32)
     playerScroller.BackgroundTransparency = 0.08
     playerScroller.BorderSizePixel = 0
     playerScroller.ScrollBarThickness = 6
@@ -1628,7 +1294,7 @@ do
             local btn = Instance.new("TextButton", row)
             btn.Size = UDim2.new(0.6, -4, 1, 0)
             btn.Position = UDim2.new(0, 0, 0, 0)
-            btn.BackgroundColor3 = THEME.Button
+            btn.BackgroundColor3 = Color3.fromRGB(30,30,40)
             btn.BackgroundTransparency = 0.15
             btn.Text = plr.DisplayName .. " (" .. plr.Name .. ")"
             btn.TextColor3 = Color3.fromRGB(220,220,255)
@@ -1650,7 +1316,7 @@ do
             local tpBtn = Instance.new("TextButton", row)
             tpBtn.Size = UDim2.new(0.4, -4, 1, 0)
             tpBtn.Position = UDim2.new(0.6, 4, 0, 0)
-            tpBtn.BackgroundColor3 = THEME.Accent
+            tpBtn.BackgroundColor3 = Color3.fromRGB(60,100,180)
             tpBtn.BackgroundTransparency = 0.08
             tpBtn.Text = "Teleport"
             tpBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -1702,7 +1368,7 @@ do
     local resultBox = Instance.new("TextLabel", scannerPanel)
     resultBox.Size = UDim2.new(1, -8, 1, -60)
     resultBox.Position = UDim2.new(0, 4, 0, 56)
-    resultBox.BackgroundColor3 = THEME.Panel
+    resultBox.BackgroundColor3 = Color3.fromRGB(24,24,32)
     resultBox.BackgroundTransparency = 0.08
     resultBox.TextColor3 = Color3.fromRGB(220,220,255)
     resultBox.Font = Enum.Font.Code
@@ -1734,16 +1400,9 @@ do
 end
     local page = CommandsPage
     local grid = Instance.new("Frame", page)
-    grid.Name = "CommandsGrid"
-    grid.Size = UDim2.new(1, -24, 1, -24)
-    grid.Position = UDim2.new(0, 12, 0, 12)
+    grid.Size = UDim2.new(1, -20, 1, -20)
+    grid.Position = UDim2.new(0, 10, 0, 10)
     grid.BackgroundTransparency = 1
-    -- responsive grid layout
-    local gridLayout = Instance.new("UIGridLayout", grid)
-    gridLayout.CellSize = UDim2.new(0, 160, 0, 40)
-    gridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
-    gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    CommandsGridLayout = gridLayout
 
     local function colX(i) return 12 + (i-1) * 170 end
     local function rowY(r) return (r-1) * 48 end
@@ -1784,12 +1443,12 @@ end
         for _, obj in ipairs(char:GetDescendants()) do
             if obj:IsA("BasePart") then
                 for _, child in ipairs(obj:GetChildren()) do
-                    if tableFind(killForceClasses, child.ClassName) then
+                    if table.find(killForceClasses, child.ClassName) then
                         pcall(function() child:Destroy() end)
                     end
                 end
             else
-                if tableFind(killForceClasses, obj.ClassName) then
+                if table.find(killForceClasses, obj.ClassName) then
                     pcall(function() obj:Destroy() end)
                 end
             end
@@ -1862,7 +1521,7 @@ end
     end
 
     -- Noclip button
-    local noclipBtn = makeButton(grid, "Noclip: Off", UDim2.new(0,160,0,34), nil, function(self)
+    local noclipBtn = makeButton(grid, "Noclip: Off", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(1)), function(self)
         noclipOn = not noclipOn
         self.Text = "Noclip: "..(noclipOn and "On" or "Off")
         if noclipOn then
@@ -1885,7 +1544,7 @@ end
     end)
 
     -- zombgui button
-    local hopBtn = makeButton(grid, "Zombie Game upd3", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Zombie Game upd3", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(6)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/osukfcdays/zlfucker/refs/heads/main/.luau"))();
         end)
@@ -1897,7 +1556,7 @@ end
     end)
 
     -- infintyieldebug button
-    local iycmdbypBtn = makeButton(grid, "InfiniteYield UI", UDim2.new(0,160,0,34), nil, function()
+    local iycmdbypBtn = makeButton(grid, "InfiniteYield UI", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(7)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))();
         end)
@@ -1909,7 +1568,7 @@ end
     end)
 
     -- autofarms button
-    local hopBtn = makeButton(grid, "Zombie Attack Auto", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Zombie Attack Auto", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(5)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/ZZINS077/Zombie-Attack/refs/heads/main/ZZINS%20HUB"))();
         end)
@@ -1921,7 +1580,7 @@ end
     end)
 
     -- ServerHop button
-    local hopBtn = makeButton(grid, "Rejoin Server", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Rejoin Server", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(1)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/zukatech1/customluascripts/refs/heads/main/ServerHopper.lua"))();
         end)
@@ -1933,7 +1592,7 @@ end
     end)
 
     -- XVC button
-    local xvcBtn = makeButton(grid, "XVC Hub", UDim2.new(0,160,0,34), nil, function()
+    local xvcBtn = makeButton(grid, "XVC Hub", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(8)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://pastebin.com/raw/Piw5bqGq"))();
         end)
@@ -1945,7 +1604,7 @@ end
     end)
 
     -- AutoPilot button
-    local autopiBtn = makeButton(grid, "Auto Sword Fighter E/R", UDim2.new(0,160,0,34), nil, function()
+    local autopiBtn = makeButton(grid, "Auto Sword Fighter E/R", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(7)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/zukatech1/customluascripts/refs/heads/main/swordnpc"))();
         end)
@@ -1957,7 +1616,7 @@ end
     end)
 
     -- explorer button
-    local anticbyBtn = makeButton(grid, "Admin Commands FE", UDim2.new(0,160,0,34), nil, function()
+    local anticbyBtn = makeButton(grid, "Admin Commands FE", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(3)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))();
         end)
@@ -1969,7 +1628,7 @@ end
     end)
 
 -- flingnu2 button
-local hopBtn = makeButton(grid, "Fling V.2 Kawaii", UDim2.new(0,160,0,34), nil, function()
+local hopBtn = makeButton(grid, "Fling V.2 Kawaii", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(5)), function()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/hellohellohell012321/KAWAII-FREAKY-FLING/main/kawaii_freaky_fling.lua"))();
     end)
@@ -1981,7 +1640,7 @@ local hopBtn = makeButton(grid, "Fling V.2 Kawaii", UDim2.new(0,160,0,34), nil, 
 end)
 
     -- FbotUI button
-    local flnguiBtn = makeButton(grid, "Follow Player UI", UDim2.new(0,160,0,34), nil, function()
+    local flnguiBtn = makeButton(grid, "Follow Player UI", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(7)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/zukatech1/customluascripts/refs/heads/main/flingaddon.lua"))();
         end)
@@ -1993,7 +1652,7 @@ end)
     end)
 
     -- FlingUI button
-    local flnguiBtn = makeButton(grid, "Fling V.1", UDim2.new(0,160,0,34), nil, function()
+    local flnguiBtn = makeButton(grid, "Fling V.1", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(6)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/miso517/scirpt/refs/heads/main/main.lua"))();
         end)
@@ -2005,7 +1664,7 @@ end)
     end)
 
     -- esp button
-    local espBtn = makeButton(grid, "Chams/ESP", UDim2.new(0,160,0,34), nil, function()
+    local espBtn = makeButton(grid, "Chams/ESP", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(8)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/zukatech1/customluascripts/refs/heads/main/esp.lua"))();
         end)
@@ -2017,7 +1676,7 @@ end)
     end)
 
     -- ChatBypass button
-    local chatbypBtn = makeButton(grid, "Bypass Chat UI", UDim2.new(0,160,0,34), nil, function()
+    local chatbypBtn = makeButton(grid, "Bypass Chat UI", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(4)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/shadow62x/catbypass/main/upfix"))();
         end)
@@ -2029,10 +1688,9 @@ end)
     end)
 
     -- Smooth & Upright Fly System (stable, no tilt, no choppiness)
-    flyConn = flyConn or nil
-    flyOn = flyOn or false
-    flySpeed = flySpeed or 3
-    local smoothness = 0.15 -- 0.1-0.2 for responsive yet smooth control
+    local flyConn, flyOn = nil, false
+    local flySpeed = flySpeed or 3
+    local smoothness = 0.15 -- 0.1–0.2 for responsive yet smooth control
 
     local function setHumanoidState(h, enabled)
         if not h then return end
@@ -2045,7 +1703,7 @@ end)
         end
     end
 
-    local flyBtn = makeButton(grid, "Fly: Off", UDim2.new(0,160,0,34), nil, function(self)
+    local flyBtn = makeButton(grid, "Fly: Off", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(2)), function(self)
         flyOn = not flyOn
         self.Text = "Fly: " .. (flyOn and "On" or "Off")
 
@@ -2065,15 +1723,12 @@ end)
                 if not character or not hrp or not hrp.Parent then return end
 
                 local move = Vector3.zero
-                -- map movement: W forward, S backward, A left, D right, Space up, LeftShift down
-                local forward = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z).Unit
-                local right = Vector3.new(cam.CFrame.RightVector.X, 0, cam.CFrame.RightVector.Z).Unit
-                if UIS:IsKeyDown(Enum.KeyCode.W) then move = move + forward end
-                if UIS:IsKeyDown(Enum.KeyCode.S) then move = move - forward end
-                if UIS:IsKeyDown(Enum.KeyCode.A) then move = move - right end
-                if UIS:IsKeyDown(Enum.KeyCode.D) then move = move + right end
-                if UIS:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
-                if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then move = move - Vector3.new(0,1,0) end
+                if UIS:IsKeyDown(Enum.KeyCode.W) then move = cam.CFrame.LookVector end
+                if UIS:IsKeyDown(Enum.KeyCode.S) then move = cam.CFrame.LookVector end
+                if UIS:IsKeyDown(Enum.KeyCode.A) then move = cam.CFrame.RightVector end
+                if UIS:IsKeyDown(Enum.KeyCode.D) then move = cam.CFrame.RightVector end
+                if UIS:IsKeyDown(Enum.KeyCode.Space) then move = Vector3.new(0,1,0) end
+                if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then move = Vector3.new(0,1,0) end
 
                 if move.Magnitude > 0 then
                     targetVel = move.Unit * flySpeed * 10
@@ -2107,7 +1762,7 @@ end)
     end)
 
     -- dexex button
-    local hopBtn = makeButton(grid, "Super Sword Reach", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Super Sword Reach", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(3)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/Paul512-max/-Universal-Sword-Script-/refs/heads/main/%F0%9F%93%8C%20Universal%20Sword%20Script%202"))();
         end)
@@ -2120,7 +1775,7 @@ end)
 
 
     -- Superfly button
-    local hopBtn = makeButton(grid, "Fly V.2 GUI", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Fly V.2 GUI", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(3)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/396abc/Script/refs/heads/main/FlyR15.lua"))();
         end)
@@ -2132,7 +1787,7 @@ end)
     end)
 	
     -- Infinite Jump
-    local infBtn = makeButton(grid, "InfJump: Off", UDim2.new(0,160,0,34), nil, function(self)
+    local infBtn = makeButton(grid, "InfJump: Off", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(4)), function(self)
         infJump = not infJump
         self.Text = "InfJump: "..(infJump and "On" or "Off")
         notify("Zuka Hub", "Infinite Jump "..(infJump and "enabled" or "disabled"), 2)
@@ -2144,7 +1799,7 @@ end)
     end)
 
     -- Ctrl+Click Teleport (local)
-    local tpBtn = makeButton(grid, "Ctrl+Click TP: Off", UDim2.new(0,160,0,34), nil, function(self)
+    local tpBtn = makeButton(grid, "Ctrl+Click TP: Off", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(5)), function(self)
         tpCtrlOn = not tpCtrlOn
         self.Text = "Ctrl+Click TP: "..(tpCtrlOn and "On" or "Off")
         notify("Zuka Hub", "Ctrl+Click TP "..(tpCtrlOn and "enabled" or "disabled"), 2)
@@ -2164,7 +1819,7 @@ end)
     end)
 
     -- Extender button
-    local sfreachBtn = makeButton(grid, "Sword Reach", UDim2.new(0,160,0,34), nil, function()
+    local sfreachBtn = makeButton(grid, "Sword Reach", UDim2.new(0,160,0,34), UDim2.new(0, colX(1), 0, rowY(6)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/Anaszaxo555/Y/refs/heads/main/Y"))();
         end)
@@ -2176,7 +1831,7 @@ end)
     end)
 
     -- privateser button
-    local hopBtn = makeButton(grid, "Private Server", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Private Server", UDim2.new(0,160,0,34), UDim2.new(0, colX(2), 0, rowY(2)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/veil0x14/LocalScripts/refs/heads/main/pg.lua"))();
         end)
@@ -2188,7 +1843,7 @@ end)
     end)
 
 -- aichat button
-local chadaiBtn = makeButton(grid, "AI Player Chat", UDim2.new(0,160,0,34), nil, function()
+local chadaiBtn = makeButton(grid, "AI Player Chat", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(2)), function()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/zukatech1/customluascripts/refs/heads/main/Broken.lua"))();
     end)
@@ -2200,7 +1855,7 @@ local chadaiBtn = makeButton(grid, "AI Player Chat", UDim2.new(0,160,0,34), nil,
 end)
 
     -- solara button
-    local hopBtn = makeButton(grid, "Altair Hub v2", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Altair Hub v2", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(8)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://cdn.authguard.org/virtual-file/27d9b9180d7a430b8633c9c55db3b5bf"))();
         end)
@@ -2212,7 +1867,7 @@ end)
     end)
 
     -- searchee button
-    local hopBtn = makeButton(grid, "Script Search", UDim2.new(0,160,0,34), nil, function()
+    local hopBtn = makeButton(grid, "Script Search", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(4)), function()
         local ok, err = pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/AZYsGithub/chillz-workshop/main/ScriptSearcher"))();
         end)
@@ -2224,10 +1879,85 @@ end)
     end)
 
 
-    -- Anti-fling utilities are defined earlier; UI below uses those implementations.
+    -- === Anti-Fling System (refined) ===
+
+    local antiConn
+    local antiFlingOn = false
+    local lastSafeCFrame = nil
+    local lastSafeTime = 0
+    local velocityThreshold = velocityThreshold or 150 -- defaults if missing
+    local displacementThreshold = displacementThreshold or 30
+
+    -- Utility: remove physics objects that can cause fling
+    local function removeForceObjectsFromCharacter(char)
+        for _, v in ipairs(char:GetDescendants()) do
+            if v:IsA("BodyMover") or v:IsA("VectorForce") or v:IsA("AlignPosition") or v:IsA("AlignOrientation") then
+                pcall(function() v:Destroy() end)
+            end
+        end
+    end
+
+    -- Utility: velocity check
+    local function isVelocitySuspicious(vel)
+        return vel.Magnitude > velocityThreshold
+    end
+
+    -- Utility: displacement check
+    local function isDisplacementSuspicious(lastCFrame, currentCFrame)
+        local delta = (lastCFrame.Position - currentCFrame.Position).Magnitude
+        return delta > displacementThreshold
+    end
+
+    -- Restore character safely
+    local function restoreCharacterToSafe(char)
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp or not lastSafeCFrame then return end
+        pcall(function()
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            hrp.CFrame = lastSafeCFrame
+        end)
+    end
+
+    -- Start / Stop connections
+    local function startAntiFling()
+        if antiConn then pcall(function() antiConn:Disconnect() end) end
+
+        antiConn = RunService.Heartbeat:Connect(function()
+            if not antiFlingOn then return end
+            local char = LocalPlayer.Character
+            if not char then return end
+
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hrp or not hum or hum.Health <= 0 then return end
+
+            removeForceObjectsFromCharacter(char)
+
+            local vel = hrp.AssemblyLinearVelocity or Vector3.zero
+            local stable = (vel.Magnitude < (velocityThreshold * 0.25)) and (not hum.PlatformStand)
+
+            if stable then
+                lastSafeCFrame = hrp.CFrame
+                lastSafeTime = tick()
+            end
+
+            if isVelocitySuspicious(vel) then
+                restoreCharacterToSafe(char)
+                removeForceObjectsFromCharacter(char)
+            elseif lastSafeCFrame and isDisplacementSuspicious(lastSafeCFrame, hrp.CFrame) then
+                restoreCharacterToSafe(char)
+            end
+        end)
+    end
+
+    local function stopAntiFling()
+        if antiConn then pcall(function() antiConn:Disconnect() end) end
+        antiConn = nil
+    end
 
     -- === Anti-Fling UI ===
-    local antiBtn = makeButton(grid, "Anti-Fling: Off", UDim2.new(0,160,0,34), nil, function(self)
+    local antiBtn = makeButton(grid, "Anti-Fling: Off", UDim2.new(0,160,0,34), UDim2.new(0, colX(3), 0, rowY(1)), function(self)
         antiFlingOn = not antiFlingOn
         self.Text = "Anti-Fling: " .. (antiFlingOn and "On" or "Off")
 
@@ -2244,7 +1974,7 @@ end)
     local velBox = Instance.new("TextBox", grid)
     velBox.Size = UDim2.new(0,80,0,24)
     velBox.Position = UDim2.new(0, colX(4)+10, 0, rowY(1) + 8)
-    velBox.BackgroundColor3 = THEME.Button
+    velBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
     velBox.TextColor3 = Color3.fromRGB(255,255,255)
     velBox.Font = Enum.Font.Code
     velBox.TextSize = 14
@@ -2264,7 +1994,7 @@ end)
     local disBox = Instance.new("TextBox", grid)
     disBox.Size = UDim2.new(0,80,0,24)
     disBox.Position = UDim2.new(0, colX(4)+10, 0, rowY(1) + 40)
-    disBox.BackgroundColor3 = THEME.Button
+    disBox.BackgroundColor3 = Color3.fromRGB(40,40,40)
     disBox.TextColor3 = Color3.fromRGB(255,255,255)
     disBox.Font = Enum.Font.Code
     disBox.TextSize = 14
@@ -2341,7 +2071,7 @@ local function animateMinimize(minimize)
     else
         PagesArea.Visible = true
         TabsColumn.Visible = true
-        MinBtn.Text = "-"
+        MinBtn.Text = "–"
         TweenService:Create(MainFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Size = normalSize
         }):Play()
@@ -2356,8 +2086,8 @@ MinBtn.MouseButton1Click:Connect(function()
 end)
 
 -- On load, ensure MinBtn is correct
-MinBtn.Text = minimized and "+" or "-"
+MinBtn.Text = minimized and "+" or "–"
 
 
 -- Final notification
-notify("Zuka Hub", "Loaded - We're So Back.", 3)
+notify("Zuka Hub", "Loaded — We're So Back.", 3)
